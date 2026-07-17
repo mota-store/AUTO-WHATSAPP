@@ -9,8 +9,11 @@ let db: ReturnType<typeof drizzle> | null = null
 export async function getDb() {
   if (!db) {
     console.log('🔍 [DB DEBUG] Tentando ler DATABASE_URL...');
-    console.log('🔍 [DB DEBUG] Chaves DATABASE disponíveis:', Object.keys(process.env).filter(k => k.includes("DATABASE")));
-    const databaseUrl = process.env.DATABASE_URL
+    const dbKeys = Object.keys(process.env).filter(k => k.includes("DATABASE"));
+    console.log('🔍 [DB DEBUG] Chaves DATABASE disponíveis:', dbKeys);
+    
+    // Tentar ler de forma insensível a espaços ou nomes aproximados
+    const databaseUrl = process.env.DATABASE_URL || process.env['DATABASE_URL '] || process.env.DATABASEURL;
     
     if (!databaseUrl) {
       console.error('❌ [DB] DATABASE_URL não definida nas variáveis de ambiente');
