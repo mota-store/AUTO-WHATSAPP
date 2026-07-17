@@ -293,11 +293,12 @@ function buildMenuMessage(menu: MenuNode): string {
   return message.trim()
 }
 
-// Helper para reconexão automática em caso de falha temporária
+// Helper para criar sessão WhatsApp
+// IMPORTANTE: NÃO reconecta automaticamente. Só conecta quando o usuário solicita.
 async function createWhatsAppSession(userId: number, phoneNumber: string, instanceId: number) {
   const sessionPath = `sessions/session-${userId}`
 
-  // Limpeza profunda para nova tentativa de pareamento
+  // Limpeza da sessão anterior
   if (fs.existsSync(sessionPath)) {
     try { fs.rmSync(sessionPath, { recursive: true, force: true }) } catch (e) {}
   }
@@ -340,6 +341,7 @@ async function createWhatsAppSession(userId: number, phoneNumber: string, instan
     const { connection, lastDisconnect, qr } = update
 
     if (qr) {
+      // Salvar QR Code no banco - permanece FIXO até ser escaneado ou expirar
       await db.updateWhatsappInstance(instanceId, {
         status: 'connecting',
         qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qr)}`,
@@ -348,25 +350,14 @@ async function createWhatsAppSession(userId: number, phoneNumber: string, instan
 
     if (connection === 'close') {
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut
+      console.log(`📡 [MOTA-FLOW] Conexão fechada. Status: ${statusCode}`)
 
-      console.log(`📡 [MOTA-FLOW] Conexão fechada. Status: ${statusCode}. Reconectar? ${shouldReconnect}`)
-
+      // ATUALIZAR STATUS NO BANCO MAS NÃO RECONNECTAR AUTOMATICAMENTE
+      // O usuário precisa clicar em "Reconectar" no Dashboard
       await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null })
 
-      // Reconexão automática com tentativas limitadas
-      if (shouldReconnect && statusCode === 515) {
-        const req = pairingCodeRequests.get(userId)
-        if (req && req.attempts < 3) {
-          req.attempts++
-          const delay = req.attempts * 15000 // 15s, 30s, 45s entre tentativas
-          console.log(`🔄 [MOTA-FLOW] Tentativa ${req.attempts}/3 em ${delay / 1000}s...`)
-
-          req.timer = setTimeout(async () => {
-            await createWhatsAppSession(userId, req.number, instanceId)
-          }, delay)
-        }
-      }
+      // Limpar sessão do mapa
+      sessions.delete(userId)
     } else if (connection === 'open') {
       console.log('✅ [MOTA-FLOW] WhatsApp conectado com sucesso!')
       await db.updateWhatsappInstance(instanceId, {
@@ -387,6 +378,15 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
     const user = (req as any).user as AuthPayload
     const { phoneNumber, usePairingCode } = req.body
 
+    // Verificar se já existe uma sessão ativa
+    const existingSession = sessions.get(user.userId)
+    if (existingSession) {
+      try {
+        existingSession.logout()
+      } catch (e) {}
+      sessions.delete(user.userId)
+    }
+
     let instance = await db.getWhatsappInstance(user.userId)
     if (!instance) {
       await db.createWhatsappInstance(user.userId)
@@ -394,6 +394,13 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
     }
 
     const sessionId = user.userId
+
+    // Limpar status anterior
+    await db.updateWhatsappInstance(instance.id, {
+      status: 'connecting',
+      qrCode: null,
+      phoneNumber: null,
+    })
 
     if (usePairingCode && phoneNumber) {
       const sock = await createWhatsAppSession(sessionId, phoneNumber, instance.id)
@@ -417,7 +424,7 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
 
     // Conexão via QR Code
     const sock = await createWhatsAppSession(sessionId, '', instance.id)
-    res.json({ message: 'Conexão iniciada' })
+    res.json({ message: 'Conexão iniciada. QR Code será gerado em instantes.' })
   } catch (error) {
     console.error(error)
     res.status(500).json({ message: 'Erro ao conectar WhatsApp' })
