@@ -22,6 +22,7 @@ import type { ConnectionState, WAConnectionState } from '@whiskeysockets/baileys
 const execAsync = promisify(exec)
 const sessions = new Map<number, any>()
 const pairingCodeRequests = new Map<number, { number: string, attempts: number, timer: any }>()
+const lastConnectionAttempt = new Map<number, number>()
 const messageStates = new Map<string, { flowId: number, menuId: string, userId: number, instanceId: number }>()
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -331,6 +332,15 @@ function cleanSession(userId: number) {
 
 // Helper para criar sessão WhatsApp via QR Code
 async function createQRSession(userId: number, instanceId: number) {
+  const now = Date.now()
+  const lastAttempt = lastConnectionAttempt.get(userId) || 0
+  
+  if (now - lastAttempt < 120000) {
+    console.log(`⏳ [MOTA-FLOW] Aguardando trava de 2 minutos para usuário ${userId}`)
+    return sessions.get(userId)
+  }
+  
+  lastConnectionAttempt.set(userId, now)
   cleanSession(userId)
 
   const sessionPath = `sessions/session-${userId}`
@@ -393,11 +403,17 @@ async function createQRSession(userId: number, instanceId: number) {
 
     if (connection === 'close') {
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
-      console.log(`📡 [MOTA-FLOW] Conexão fechada. Status: ${statusCode}`)
+      const shouldReconnect = statusCode !== DisconnectReason.loggedOut
+      
+      console.log(`📡 [MOTA-FLOW] Conexão fechada. Status: ${statusCode}. Reconectando: ${shouldReconnect}`)
 
-      // Atualizar status no banco
-      await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null })
-      sessions.delete(userId)
+      if (shouldReconnect) {
+        // Se for erro 515 (Restart), tenta reconectar mais rápido, respeitando a trava de 2 min no createQRSession
+        setTimeout(() => createQRSession(userId, instanceId), 5000)
+      } else {
+        await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null })
+        cleanSession(userId)
+      }
     } else if (connection === 'open') {
       console.log('✅ [MOTA-FLOW] WhatsApp conectado com sucesso!')
       await db.updateWhatsappInstance(instanceId, {
