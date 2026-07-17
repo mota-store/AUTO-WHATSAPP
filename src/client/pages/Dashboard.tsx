@@ -58,6 +58,23 @@ export default function Dashboard() {
     navigate('/login')
   }
 
+  const handleConnect = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/whatsapp/connect', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (response.ok) {
+        toast.success('Iniciando conexão...')
+        loadData()
+      }
+    } catch (error) {
+      toast.error('Erro ao conectar')
+    }
+  }
+
   const handleDisconnect = async () => {
     if (!instance) return
 
@@ -187,13 +204,16 @@ export default function Dashboard() {
                 )}
               </div>
             ) : (
-              <button
-                onClick={() => navigate('/flow-editor')}
-                className="flex items-center gap-2 px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent/90 transition"
-              >
-                <Plus className="w-5 h-5" />
-                Conectar WhatsApp
-              </button>
+              <div className="text-center py-4">
+                <p className="text-muted-foreground mb-4">Você ainda não tem uma instância de WhatsApp.</p>
+                <button
+                  onClick={handleConnect}
+                  className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition mx-auto font-bold shadow-lg"
+                >
+                  <Plus className="w-5 h-5" />
+                  Criar Instância WhatsApp
+                </button>
+              </div>
             )}
           </div>
         </section>

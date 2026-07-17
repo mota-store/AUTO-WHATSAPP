@@ -48,9 +48,23 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     }
 
     const passwordHash = await hashPassword(password)
-    await db.createUser(email, passwordHash, name)
+    const result = await db.createUser(email, passwordHash, name)
+    
+    // Obter o usuário recém-criado para gerar o token
+    const newUser = await db.getUserByEmail(email)
+    if (!newUser) throw new Error('Erro ao recuperar usuário após criação')
 
-    res.json({ message: 'Usuário criado com sucesso' })
+    const token = await createToken(newUser.id, newUser.email)
+
+    res.json({ 
+      message: 'Usuário criado com sucesso',
+      token,
+      user: {
+        id: newUser.id,
+        email: newUser.email,
+        name: newUser.name
+      }
+    })
   } catch (error) {
     console.error(error)
     res.status(500).json({ message: 'Erro ao criar usuário' })
@@ -175,6 +189,30 @@ app.delete('/api/flows/:flowId', authMiddleware, async (req: Request, res: Respo
 })
 
 // WhatsApp Routes
+app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as AuthPayload
+    let instance = await db.getWhatsappInstance(user.userId)
+    
+    if (!instance) {
+      await db.createWhatsappInstance(user.userId)
+      instance = await db.getWhatsappInstance(user.userId)
+    }
+
+    // Aqui você integraria com o Baileys para gerar o QR Code
+    // Por enquanto, simulamos o início da conexão
+    await db.updateWhatsappInstance(instance!.id, {
+      status: 'connecting',
+      qrCode: 'https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=MotaFlow_Simulated_QR',
+    })
+
+    res.json({ message: 'Conexão iniciada' })
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ message: 'Erro ao conectar WhatsApp' })
+  }
+})
+
 app.post('/api/whatsapp/:instanceId/disconnect', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { instanceId } = req.params

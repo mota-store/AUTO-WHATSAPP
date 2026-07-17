@@ -145,30 +145,32 @@ export default function FlowEditor() {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="bg-card border-b border-border shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            Voltar
-          </button>
-          <h1 className="text-2xl font-bold text-primary flex items-center gap-2">Editor de Fluxos</h1>
+        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-wrap justify-between items-center gap-4">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              <span className="hidden sm:inline">Voltar</span>
+            </button>
+            <h1 className="text-xl sm:text-2xl font-bold text-primary flex items-center gap-2">Editor de Fluxos</h1>
+          </div>
           <button
             onClick={handleSave}
             disabled={isSaving}
             className="flex items-center gap-2 px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent/90 transition disabled:opacity-50"
           >
             <Save className="w-5 h-5" />
-            {isSaving ? 'Salvando...' : 'Salvar'}
+            <span>{isSaving ? 'Salvando...' : 'Salvar'}</span>
           </button>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Panel - Flow Info */}
-          <div className="col-span-1 space-y-4">
+          <div className="lg:col-span-1 space-y-4">
             <div className="bg-card rounded-xl border border-border p-6">
               <h2 className="font-bold text-foreground mb-4">Informações</h2>
 
@@ -202,7 +204,7 @@ export default function FlowEditor() {
           </div>
 
           {/* Right Panel - Menu Editor */}
-          <div className="col-span-2">
+          <div className="lg:col-span-2">
             {selectedMenu && (
               <div className="bg-card rounded-xl border border-border p-6">
                 <h2 className="font-bold text-foreground mb-4">{selectedMenu.title}</h2>

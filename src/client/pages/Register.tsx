@@ -33,8 +33,10 @@ export default function Register() {
       const data = await response.json()
 
       if (response.ok) {
-        toast.success('Conta criada com sucesso! Faça login para continuar.')
-        navigate('/login')
+        localStorage.setItem('token', data.token)
+        localStorage.setItem('user', JSON.stringify(data.user))
+        toast.success('Conta criada com sucesso!')
+        navigate('/dashboard')
       } else {
         toast.error(data.message || 'Erro ao criar conta')
       }
