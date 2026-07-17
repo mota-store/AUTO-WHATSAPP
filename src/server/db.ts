@@ -8,6 +8,8 @@ let db: ReturnType<typeof drizzle> | null = null
 
 export async function getDb() {
   if (!db) {
+    console.log('🔍 [DB DEBUG] Tentando ler DATABASE_URL...');
+    console.log('🔍 [DB DEBUG] Chaves DATABASE disponíveis:', Object.keys(process.env).filter(k => k.includes("DATABASE")));
     const databaseUrl = process.env.DATABASE_URL
     
     if (!databaseUrl) {
