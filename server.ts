@@ -10,9 +10,7 @@ import makeWASocket, {
   DisconnectReason, 
   useMultiFileAuthState, 
   fetchLatestBaileysVersion,
-  makeCacheableSignalKeyStore,
-  WAMessageKey,
-  Contact
+  makeCacheableSignalKeyStore
 } from '@whiskeysockets/baileys'
 import pino from 'pino'
 import { Boom } from '@hapi/boom'
@@ -59,9 +57,8 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     }
 
     const passwordHash = await hashPassword(password)
-    const result = await db.createUser(email, passwordHash, name)
+    await db.createUser(email, passwordHash, name)
     
-    // Obter o usuário recém-criado para gerar o token
     const newUser = await db.getUserByEmail(email)
     if (!newUser) throw new Error('Erro ao recuperar usuário após criação')
 
@@ -222,7 +219,7 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
         creds: state.creds,
         keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
       },
-      logger: pino({ level: 'info' }), // Ativar logs para depuração no Render
+      logger: pino({ level: 'silent' }),
       browser: ['MotaFlow', 'Chrome', '1.0.0'],
       connectTimeoutMs: 60000,
       defaultQueryTimeoutMs: 0,
@@ -244,12 +241,18 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
       }
 
       if (connection === 'close') {
-        const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut
-        if (shouldReconnect) {
-          // Lógica de reconexão simplificada
-        }
+        const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
+        const shouldReconnect = statusCode !== DisconnectReason.loggedOut
+        
+        console.log(`📡 Conexão fechada. Código: ${statusCode}. Reconectar? ${shouldReconnect}`)
+        
         await db.updateWhatsappInstance(instance!.id, { status: 'disconnected', qrCode: null })
+        
+        if (shouldReconnect) {
+          // Lógica de reconexão poderia ser implementada aqui se necessário
+        }
       } else if (connection === 'open') {
+        console.log('✅ WhatsApp conectado com sucesso!')
         await db.updateWhatsappInstance(instance!.id, { 
           status: 'connected', 
           qrCode: null,
@@ -259,11 +262,14 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
     })
 
     if (usePairingCode && phoneNumber) {
+      // Aguardar inicialização do socket antes de pedir pairing code
       setTimeout(async () => {
         try {
-          const code = await sock.requestPairingCode(phoneNumber.replace(/\D/g, ''))
+          const cleanNumber = phoneNumber.replace(/\D/g, '')
+          const code = await sock.requestPairingCode(cleanNumber)
           res.json({ pairingCode: code })
         } catch (err) {
+          console.error('Erro ao gerar pairing code:', err)
           res.status(500).json({ message: 'Erro ao gerar código de pareamento' })
         }
       }, 3000)
@@ -280,6 +286,14 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
 app.post('/api/whatsapp/:instanceId/disconnect', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { instanceId } = req.params
+    const user = (req as any).user as AuthPayload
+    
+    // Tentar fechar a sessão ativa
+    const sock = sessions.get(user.userId)
+    if (sock) {
+      try { sock.logout() } catch (e) {}
+      sessions.delete(user.userId)
+    }
 
     await db.updateWhatsappInstance(parseInt(instanceId), {
       status: 'disconnected',
@@ -307,19 +321,19 @@ app.get('*', (req: Request, res: Response) => {
 })
 
 app.listen(PORT, async () => {
-  console.log(`🚀 Servidor rodando em http://localhost:${PORT}`)
+  console.log(`🚀 Servidor MOTA-FLOW rodando em http://localhost:${PORT}`)
   
   // Tentar sincronizar o banco de dados automaticamente no boot
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.NODE_ENV === 'production' || process.env.DATABASE_URL) {
     try {
       console.log('🔄 Sincronizando banco de dados...')
       const databaseUrl = process.env.DATABASE_URL || ''
       const sslUrl = databaseUrl.includes('?') 
         ? `${databaseUrl}&ssl={"rejectUnauthorized":true}`
         : `${databaseUrl}?ssl={"rejectUnauthorized":true}`
-      const { stdout, stderr } = await execAsync(`DATABASE_URL='${sslUrl}' npx drizzle-kit push`)
-      console.log('✅ Banco de dados sincronizado:', stdout)
-      if (stderr) console.error('⚠️ Aviso na sincronização:', stderr)
+      
+      const { stdout } = await execAsync(`DATABASE_URL='${sslUrl}' npx drizzle-kit push`)
+      console.log('✅ Banco de dados sincronizado com sucesso!')
     } catch (error) {
       console.error('❌ Erro ao sincronizar banco de dados:', error)
     }

@@ -6,8 +6,16 @@ export default function ThemeToggle() {
 
   useEffect(() => {
     const root = window.document.documentElement
-    const initialColorValue = root.classList.contains('dark')
-    setIsDark(initialColorValue)
+    const savedTheme = localStorage.getItem('theme')
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+
+    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+      root.classList.add('dark')
+      setIsDark(true)
+    } else {
+      root.classList.remove('dark')
+      setIsDark(false)
+    }
   }, [])
 
   const toggleTheme = () => {
@@ -26,7 +34,7 @@ export default function ThemeToggle() {
   return (
     <button
       onClick={toggleTheme}
-      className="p-2 rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/80 transition"
+      className="p-2 rounded-xl bg-muted/50 text-muted-foreground hover:bg-primary hover:text-white transition-smooth btn-touch border border-border/50"
       aria-label="Alternar tema"
     >
       {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}

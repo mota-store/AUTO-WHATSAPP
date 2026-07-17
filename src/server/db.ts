@@ -1,7 +1,7 @@
 import { drizzle } from 'drizzle-orm/mysql2'
 import mysql from 'mysql2/promise'
 import * as schema from '../../drizzle/schema'
-import { eq, and } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 
 let db: ReturnType<typeof drizzle> | null = null
 
@@ -22,7 +22,7 @@ export async function getDb() {
     }
 
     if (match) {
-      const [,, , host, port, database] = match
+      const [, , , host, port, database] = match
       connectionConfig = {
         host,
         port: parseInt(port),
