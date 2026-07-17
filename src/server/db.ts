@@ -110,7 +110,7 @@ export async function createMenuFlow(userId: number, name: string, description: 
     userId,
     name,
     description,
-    flowData,
+    flowData: typeof flowData === 'object' ? JSON.stringify(flowData) : flowData,
     isActive: true,
   })
   return result
@@ -139,9 +139,14 @@ export async function updateMenuFlow(
   data: Partial<typeof schema.menuFlows.$inferInsert>
 ) {
   const database = await getDb()
+  const updateData = { ...data };
+  if (updateData.flowData && typeof updateData.flowData === 'object') {
+    updateData.flowData = JSON.stringify(updateData.flowData) as any;
+  }
+
   await database
     .update(schema.menuFlows)
-    .set(data)
+    .set(updateData)
     .where(eq(schema.menuFlows.id, flowId))
 }
 
