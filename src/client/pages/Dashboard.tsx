@@ -246,6 +246,7 @@ export default function Dashboard() {
 
   // Connection Screen Overlay — só aparece quando connectionActive é true
   if (showConnectionScreen) {
+    if (!instance) return <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm"><RefreshCw className="animate-spin text-primary" /></div>
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm">
         <div className="w-full max-w-lg mx-4 glass-card rounded-3xl p-8 relative">

@@ -454,6 +454,7 @@ async function createQRSession(userId: number, instanceId: number) {
         phoneNumber: sock.user?.id.split(':')[0]
       })
       pairingCodeRequests.delete(userId)
+      lastConnectionAttempt.delete(userId)
     }
   })
 
@@ -554,6 +555,7 @@ async function createPairingSession(userId: number, phoneNumber: string, instanc
         phoneNumber: sock.user?.id.split(':')[0]
       })
       pairingCodeRequests.delete(userId)
+      lastConnectionAttempt.delete(userId)
     }
   })
 
