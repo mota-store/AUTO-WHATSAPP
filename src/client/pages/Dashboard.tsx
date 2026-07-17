@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { LogOut, Plus, Eye, Edit2, Trash2, RefreshCw, Wifi, WifiOff } from 'lucide-react'
+import ThemeToggle from '../components/ThemeToggle'
 
 interface WhatsappInstance {
   id: number
@@ -108,14 +109,22 @@ export default function Dashboard() {
       {/* Header */}
       <header className="bg-card border-b border-border shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-foreground">AUTO-WHATSAPP</h1>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 px-4 py-2 text-muted-foreground hover:text-foreground transition"
-          >
-            <LogOut className="w-5 h-5" />
-            Sair
-          </button>
+          <h1 className="text-2xl font-bold text-primary flex items-center gap-2">
+            <span className="bg-primary text-white p-1 rounded-lg">
+              <Wifi className="w-6 h-6" />
+            </span>
+            AUTO-WHATSAPP
+          </h1>
+          <div className="flex items-center gap-4">
+            <ThemeToggle />
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-4 py-2 text-muted-foreground hover:text-foreground transition"
+            >
+              <LogOut className="w-5 h-5" />
+              Sair
+            </button>
+          </div>
         </div>
       </header>
 

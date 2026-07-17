@@ -153,7 +153,7 @@ export default function FlowEditor() {
             <ArrowLeft className="w-5 h-5" />
             Voltar
           </button>
-          <h1 className="text-2xl font-bold text-foreground">Editor de Fluxos</h1>
+          <h1 className="text-2xl font-bold text-primary flex items-center gap-2">Editor de Fluxos</h1>
           <button
             onClick={handleSave}
             disabled={isSaving}
