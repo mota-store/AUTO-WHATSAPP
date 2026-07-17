@@ -13,7 +13,7 @@ export async function getDb() {
         rejectUnauthorized: true,
       },
     })
-    db = drizzle(connection, { schema })
+    db = drizzle(connection, { schema, mode: 'default' })
   }
   return db
 }
