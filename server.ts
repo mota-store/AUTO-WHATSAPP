@@ -19,6 +19,7 @@ import { Boom } from '@hapi/boom'
 
 const execAsync = promisify(exec)
 const sessions = new Map<number, any>()
+const pairingCodeRequests = new Map<number, { number: string, attempts: number, timer: any }>()
 const app = express()
 const PORT = process.env.PORT || 3000
 
@@ -198,6 +199,83 @@ app.delete('/api/flows/:flowId', authMiddleware, async (req: Request, res: Respo
   }
 })
 
+// Helper para reconexão automática em caso de falha temporária
+async function createWhatsAppSession(userId: number, phoneNumber: string, instanceId: number) {
+  const sessionPath = `sessions/session-${userId}`
+
+  // Limpeza profunda para nova tentativa de pareamento
+  if (fs.existsSync(sessionPath)) {
+    try { fs.rmSync(sessionPath, { recursive: true, force: true }) } catch (e) {}
+  }
+
+  const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
+  const { version } = await fetchLatestBaileysVersion()
+
+  const sock = makeWASocket({
+    version,
+    printQRInTerminal: false,
+    auth: {
+      creds: state.creds,
+      keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
+    },
+    logger: pino({ level: 'silent' }),
+    browser: Browsers.macOS('Chrome'),
+    syncFullHistory: false,
+    connectTimeoutMs: 60000,
+    defaultQueryTimeoutMs: 0,
+    keepAliveIntervalMs: 30000,
+    retryRequestDelayMs: 5000,
+  })
+
+  sessions.set(userId, sock)
+
+  sock.ev.on('creds.update', saveCreds)
+
+  sock.ev.on('connection.update', async (update) => {
+    const { connection, lastDisconnect, qr } = update
+    
+    if (qr) {
+      await db.updateWhatsappInstance(instanceId, {
+        status: 'connecting',
+        qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qr)}`,
+      })
+    }
+
+    if (connection === 'close') {
+      const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
+      const shouldReconnect = statusCode !== DisconnectReason.loggedOut
+      
+      console.log(`📡 [MOTA-FLOW] Conexão fechada. Status: ${statusCode}. Reconectar? ${shouldReconnect}`)
+      
+      await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null })
+
+      // Reconexão automática com tentativas limitadas
+      if (shouldReconnect && statusCode === 515) {
+        const req = pairingCodeRequests.get(userId)
+        if (req && req.attempts < 3) {
+          req.attempts++
+          const delay = req.attempts * 15000 // 15s, 30s, 45s entre tentativas
+          console.log(`🔄 [MOTA-FLOW] Tentativa ${req.attempts}/3 em ${delay/1000}s...`)
+          
+          req.timer = setTimeout(async () => {
+            await createWhatsAppSession(userId, req.number, instanceId)
+          }, delay)
+        }
+      }
+    } else if (connection === 'open') {
+      console.log('✅ [MOTA-FLOW] WhatsApp conectado com sucesso!')
+      await db.updateWhatsappInstance(instanceId, { 
+        status: 'connected', 
+        qrCode: null,
+        phoneNumber: sock.user?.id.split(':')[0]
+      })
+      pairingCodeRequests.delete(userId)
+    }
+  })
+
+  return sock
+}
+
 // WhatsApp Routes
 app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Response) => {
   try {
@@ -211,70 +289,16 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
     }
 
     const sessionId = user.userId
-    const sessionPath = `sessions/session-${sessionId}`
-
-    // Limpeza profunda para nova tentativa de pareamento
-    if (usePairingCode && fs.existsSync(sessionPath)) {
-      try {
-        fs.rmSync(sessionPath, { recursive: true, force: true })
-      } catch (e) {}
-    }
-
-    const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
-    const { version } = await fetchLatestBaileysVersion()
-
-    const sock = makeWASocket({
-      version,
-      printQRInTerminal: false,
-      auth: {
-        creds: state.creds,
-        keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
-      },
-      logger: pino({ level: 'silent' }),
-      // IDENTIDADE DE ALTA CONFIANÇA: macOS + Chrome
-      browser: Browsers.macOS('Chrome'),
-      syncFullHistory: false, // Desativar sincronização pesada inicial
-      connectTimeoutMs: 60000,
-      defaultQueryTimeoutMs: 0,
-      keepAliveIntervalMs: 30000,
-      retryRequestDelayMs: 5000,
-    })
-
-    sessions.set(sessionId, sock)
-
-    sock.ev.on('creds.update', saveCreds)
-
-    sock.ev.on('connection.update', async (update) => {
-      const { connection, lastDisconnect, qr } = update
-      
-      if (qr) {
-        await db.updateWhatsappInstance(instance!.id, {
-          status: 'connecting',
-          qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qr)}`,
-        })
-      }
-
-      if (connection === 'close') {
-        const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
-        const shouldReconnect = statusCode !== DisconnectReason.loggedOut
-        
-        console.log(`📡 [MOTA-FLOW] Conexão fechada. Status: ${statusCode}. Reconectar? ${shouldReconnect}`)
-        
-        await db.updateWhatsappInstance(instance!.id, { status: 'disconnected', qrCode: null })
-      } else if (connection === 'open') {
-        console.log('✅ [MOTA-FLOW] WhatsApp conectado com sucesso!')
-        await db.updateWhatsappInstance(instance!.id, { 
-          status: 'connected', 
-          qrCode: null,
-          phoneNumber: sock.user?.id.split(':')[0]
-        })
-      }
-    })
 
     if (usePairingCode && phoneNumber) {
+      const sock = await createWhatsAppSession(sessionId, phoneNumber, instance.id)
+      
+      const cleanNumber = phoneNumber.replace(/\D/g, '')
+      pairingCodeRequests.set(sessionId, { number: cleanNumber, attempts: 1, timer: null })
+
+      // Aguardar inicialização completa do socket
       setTimeout(async () => {
         try {
-          const cleanNumber = phoneNumber.replace(/\D/g, '')
           console.log(`📲 [MOTA-FLOW] Solicitando Pairing Code: ${cleanNumber}`)
           const code = await sock.requestPairingCode(cleanNumber)
           res.json({ pairingCode: code })
@@ -286,6 +310,8 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
       return
     }
 
+    // Conexão via QR Code
+    const sock = await createWhatsAppSession(sessionId, '', instance.id)
     res.json({ message: 'Conexão iniciada' })
   } catch (error) {
     console.error(error)
@@ -302,6 +328,12 @@ app.post('/api/whatsapp/:instanceId/disconnect', authMiddleware, async (req: Req
     if (sock) {
       try { sock.logout() } catch (e) {}
       sessions.delete(user.userId)
+    }
+
+    const req = pairingCodeRequests.get(user.userId)
+    if (req && req.timer) {
+      clearTimeout(req.timer)
+      pairingCodeRequests.delete(user.userId)
     }
 
     const sessionPath = `sessions/session-${user.userId}`
