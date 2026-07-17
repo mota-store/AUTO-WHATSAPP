@@ -507,7 +507,7 @@ export default function Dashboard() {
                       </button>
                     </div>
 
-                    {/* Pairing Code Display */}
+                    {/* Pairing Code Navigation */}
                     <div className="flex flex-col items-center justify-center p-8 bg-muted/30 rounded-3xl border border-border/50 relative overflow-hidden group">
                       <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-smooth">
                         <Smartphone className="w-32 h-32" />
@@ -515,51 +515,16 @@ export default function Dashboard() {
                       <h3 className="text-lg font-black mb-6 flex items-center gap-2">
                         <Smartphone className="w-5 h-5 text-primary" /> 2. Código de Pareamento
                       </h3>
-                      {!pairingCode ? (
-                        <div className="w-full space-y-4 relative z-10">
-                          <div>
-                            <label className="block text-[10px] font-black text-muted-foreground uppercase mb-2 ml-1">Número com DDD</label>
-                            <input
-                              type="text"
-                              value={phoneNumber}
-                              onChange={(e) => setPhoneNumber(e.target.value)}
-                              placeholder="Ex: 5511999999999"
-                              className="w-full px-5 py-4 bg-background border border-border rounded-2xl text-lg font-bold input-focus"
-                            />
-                          </div>
-                          <button
-                            onClick={() => handleConnect(true)}
-                            disabled={isConnecting}
-                            className="w-full py-4 btn-primary disabled:opacity-50"
-                          >
-                            {isConnecting ? (
-                              <RefreshCw className="w-6 h-6 animate-spin mx-auto" />
-                            ) : (
-                              'Gerar Código de Pareamento'
-                            )}
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="text-center space-y-6 w-full relative z-10">
-                          <div className="relative group cursor-pointer" onClick={() => copyToClipboard(pairingCode)}>
-                            <div className="text-5xl font-mono font-black text-primary tracking-[0.2em] bg-primary/10 py-8 rounded-3xl border-2 border-primary/20 shadow-inner">
-                              {pairingCode}
-                            </div>
-                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-smooth bg-primary/5 rounded-3xl">
-                              <Copy className="w-8 h-8 text-primary" />
-                            </div>
-                          </div>
-                          <p className="text-[11px] text-muted-foreground font-medium leading-relaxed bg-card/50 p-4 rounded-xl">
-                            No WhatsApp: <span className="text-foreground font-bold">Dispositivos Conectados</span> &gt; <span className="text-foreground font-bold">Conectar Dispositivo</span> &gt; <span className="text-foreground font-bold text-primary">Conectar com número de telefone</span>
-                          </p>
-                          <button 
-                            onClick={() => setPairingCode('')}
-                            className="text-sm text-primary font-black hover:underline uppercase tracking-widest"
-                          >
-                            Tentar outro número
-                          </button>
-                        </div>
-                      )}
+                      <p className="text-sm text-muted-foreground text-center mb-8">
+                        Prefere conectar usando o número de telefone? Clique no botão abaixo para gerar um código de 8 dígitos.
+                      </p>
+                      <button
+                        onClick={() => navigate('/pairing')}
+                        className="w-full py-4 bg-whatsapp text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-green-500/20 btn-touch transition-all hover:opacity-90"
+                      >
+                        <Phone className="w-5 h-5" />
+                        Conectar via Número
+                      </button>
                     </div>
                   </div>
                 )}

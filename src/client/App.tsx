@@ -5,6 +5,7 @@ import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
 import FlowEditor from './pages/FlowEditor'
 import FlowPreview from './pages/FlowPreview'
+import Pairing from './pages/Pairing'
 import ProtectedRoute from './components/ProtectedRoute'
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/flow-editor/:flowId?" element={<ProtectedRoute><FlowEditor /></ProtectedRoute>} />
           <Route path="/flow-preview/:flowId" element={<ProtectedRoute><FlowPreview /></ProtectedRoute>} />
+          <Route path="/pairing" element={<ProtectedRoute><Pairing /></ProtectedRoute>} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </Router>

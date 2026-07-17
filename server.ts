@@ -132,6 +132,38 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
 })
 
 // Dashboard Route
+app.post('/api/whatsapp/pairing-code', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as AuthPayload
+    const { phoneNumber } = req.body
+
+    if (!phoneNumber) {
+      return res.status(400).json({ message: 'Número de telefone é obrigatório' })
+    }
+
+    // Buscar ou criar instância
+    let instance = await db.getWhatsappInstance(user.userId)
+    if (!instance) {
+      await db.createWhatsappInstance(user.userId)
+      instance = await db.getWhatsappInstance(user.userId)
+    }
+
+    if (!instance) throw new Error('Falha ao gerenciar instância')
+
+    // Iniciar sessão de pareamento
+    const sock = await createPairingSession(user.userId, phoneNumber, instance.id)
+    
+    // O Baileys gera o código de pareamento de forma assíncrona
+    // Vamos aguardar o código ser gerado
+    const code = await sock.requestPairingCode(phoneNumber)
+
+    res.json({ code })
+  } catch (error: any) {
+    console.error('[PAIRING ERROR]', error)
+    res.status(500).json({ message: 'Erro ao gerar código de pareamento' })
+  }
+})
+
 app.get('/api/dashboard', authMiddleware, async (req: Request, res: Response) => {
   try {
     const user = (req as any).user as AuthPayload
