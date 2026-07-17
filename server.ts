@@ -27,9 +27,16 @@ const messageStates = new Map<string, { flowId: number, menuId: string, userId: 
 const app = express()
 const PORT = process.env.PORT || 3000
 
-console.log('🔍 [DEBUG] INSPEÇÃO DE VARIÁVEIS (Object.keys):', Object.keys(process.env).filter(k => k.includes("DATABASE")));
-console.log('🔍 [DEBUG] DATABASE_URL =', !!process.env.DATABASE_URL);
-console.log('🔍 [DEBUG] NODE_ENV =', process.env.NODE_ENV);
+console.log('🚀 [SYSTEM] Iniciando MOTA-FLOW...');
+console.log('🚀 [SYSTEM] DATABASE_URL configurada:', !!process.env.DATABASE_URL);
+if (!process.env.DATABASE_URL) {
+  console.log('⚠️ [SYSTEM] Tentando ler DATABASE_URL via Object.entries...');
+  const found = Object.entries(process.env).find(([k]) => k.trim() === 'DATABASE_URL');
+  if (found) {
+    console.log('✅ [SYSTEM] DATABASE_URL encontrada com trim!');
+    process.env.DATABASE_URL = found[1];
+  }
+}
 
 // Middleware
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }))
