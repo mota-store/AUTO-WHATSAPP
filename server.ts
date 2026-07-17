@@ -8,12 +8,9 @@ import { MenuFlowData, MenuNode, MenuOption } from './drizzle/schema'
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import fs from 'fs'
-import makeWASocket, { 
-  DisconnectReason, 
-  useMultiFileAuthState, 
-  fetchLatestBaileysVersion,
-  makeCacheableSignalKeyStore,
-  Browsers,
+import makeWASocket, {
+  DisconnectReason,
+  useMultiFileAuthState,
   WAMessage
 } from '@whiskeysockets/baileys'
 import pino from 'pino'
@@ -64,13 +61,13 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
 
     const passwordHash = await hashPassword(password)
     await db.createUser(email, passwordHash, name)
-    
+
     const newUser = await db.getUserByEmail(email)
     if (!newUser) throw new Error('Erro ao recuperar usuário após criação')
 
     const token = await createToken(newUser.id, newUser.email)
 
-    res.json({ 
+    res.json({
       message: 'Usuário criado com sucesso',
       token,
       user: {
@@ -286,7 +283,7 @@ async function processMessage(sock: any, msg: any, userId: number, instanceId: n
 // Construir mensagem de menu formatada
 function buildMenuMessage(menu: MenuNode): string {
   let message = `📌 *${menu.title}*\n\n${menu.message || 'Escolha uma opção:'}\n\n`
-  
+
   menu.options.forEach((opt: MenuOption) => {
     if (opt.nextMenuId || opt.response) {
       message += `*${opt.number} - ${opt.text}*\n`
@@ -306,22 +303,12 @@ async function createWhatsAppSession(userId: number, phoneNumber: string, instan
   }
 
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
-  const { version } = await fetchLatestBaileysVersion()
 
+  // Conexão simplificada igual ao bot que funciona
   const sock = makeWASocket({
-    version,
-    printQRInTerminal: false,
-    auth: {
-      creds: state.creds,
-      keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
-    },
+    auth: state,
     logger: pino({ level: 'silent' }),
-    browser: Browsers.macOS('Chrome'),
-    syncFullHistory: false,
-    connectTimeoutMs: 60000,
-    defaultQueryTimeoutMs: 0,
-    keepAliveIntervalMs: 30000,
-    retryRequestDelayMs: 5000,
+    browser: ['Ubuntu', 'Chrome', '110.0.5481.178'],
   })
 
   sessions.set(userId, sock)
@@ -351,7 +338,7 @@ async function createWhatsAppSession(userId: number, phoneNumber: string, instan
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update
-    
+
     if (qr) {
       await db.updateWhatsappInstance(instanceId, {
         status: 'connecting',
@@ -362,9 +349,9 @@ async function createWhatsAppSession(userId: number, phoneNumber: string, instan
     if (connection === 'close') {
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut
-      
+
       console.log(`📡 [MOTA-FLOW] Conexão fechada. Status: ${statusCode}. Reconectar? ${shouldReconnect}`)
-      
+
       await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null })
 
       // Reconexão automática com tentativas limitadas
@@ -373,8 +360,8 @@ async function createWhatsAppSession(userId: number, phoneNumber: string, instan
         if (req && req.attempts < 3) {
           req.attempts++
           const delay = req.attempts * 15000 // 15s, 30s, 45s entre tentativas
-          console.log(`🔄 [MOTA-FLOW] Tentativa ${req.attempts}/3 em ${delay/1000}s...`)
-          
+          console.log(`🔄 [MOTA-FLOW] Tentativa ${req.attempts}/3 em ${delay / 1000}s...`)
+
           req.timer = setTimeout(async () => {
             await createWhatsAppSession(userId, req.number, instanceId)
           }, delay)
@@ -382,8 +369,8 @@ async function createWhatsAppSession(userId: number, phoneNumber: string, instan
       }
     } else if (connection === 'open') {
       console.log('✅ [MOTA-FLOW] WhatsApp conectado com sucesso!')
-      await db.updateWhatsappInstance(instanceId, { 
-        status: 'connected', 
+      await db.updateWhatsappInstance(instanceId, {
+        status: 'connected',
         qrCode: null,
         phoneNumber: sock.user?.id.split(':')[0]
       })
@@ -399,7 +386,7 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
   try {
     const user = (req as any).user as AuthPayload
     const { phoneNumber, usePairingCode } = req.body
-    
+
     let instance = await db.getWhatsappInstance(user.userId)
     if (!instance) {
       await db.createWhatsappInstance(user.userId)
@@ -410,7 +397,7 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
 
     if (usePairingCode && phoneNumber) {
       const sock = await createWhatsAppSession(sessionId, phoneNumber, instance.id)
-      
+
       const cleanNumber = phoneNumber.replace(/\D/g, '')
       pairingCodeRequests.set(sessionId, { number: cleanNumber, attempts: 1, timer: null })
 
@@ -441,7 +428,7 @@ app.post('/api/whatsapp/:instanceId/disconnect', authMiddleware, async (req: Req
   try {
     const { instanceId } = req.params
     const user = (req as any).user as AuthPayload
-    
+
     const sock = sessions.get(user.userId)
     if (sock) {
       try { sock.logout() } catch (e) {}
@@ -461,7 +448,7 @@ app.post('/api/whatsapp/:instanceId/disconnect', authMiddleware, async (req: Req
     if (fs.existsSync(sessionPath)) {
       try {
         fs.rmSync(sessionPath, { recursive: true, force: true })
-      } catch (e) {}
+      } catch (e) { }
     }
 
     await db.updateWhatsappInstance(parseInt(instanceId), {
@@ -491,15 +478,15 @@ app.get('*', (req: Request, res: Response) => {
 
 app.listen(PORT, async () => {
   console.log(`🚀 Servidor MOTA-FLOW rodando em http://localhost:${PORT}`)
-  
+
   if (process.env.NODE_ENV === 'production' || process.env.DATABASE_URL) {
     try {
       console.log('🔄 Sincronizando banco de dados...')
       const databaseUrl = process.env.DATABASE_URL || ''
-      const sslUrl = databaseUrl.includes('?') 
+      const sslUrl = databaseUrl.includes('?')
         ? `${databaseUrl}&ssl={"rejectUnauthorized":true}`
         : `${databaseUrl}?ssl={"rejectUnauthorized":true}`
-      
+
       const { stdout } = await execAsync(`DATABASE_URL='${sslUrl}' npx drizzle-kit push`)
       console.log('✅ Banco de dados sincronizado com sucesso!')
     } catch (error) {
