@@ -309,7 +309,7 @@ async function createWhatsAppSession(userId: number, phoneNumber: string, instan
   const sock = makeWASocket({
     auth: state,
     logger: pino({ level: 'silent' }),
-    browser: ['Chrome (Linux)', 'Ubuntu', '22.04 LTS', 'jaeger'],
+    browser: ['Ubuntu', 'Chrome', '110.0.5481.178'],
   })
 
   sessions.set(userId, sock)
@@ -442,9 +442,9 @@ app.post('/api/whatsapp/:instanceId/disconnect', authMiddleware, async (req: Req
       sessions.delete(user.userId)
     }
 
-    const req = pairingCodeRequests.get(user.userId)
-    if (req && req.timer) {
-      clearTimeout(req.timer)
+    const pairingReq = pairingCodeRequests.get(user.userId)
+    if (pairingReq && pairingReq.timer) {
+      clearTimeout(pairingReq.timer)
       pairingCodeRequests.delete(user.userId)
     }
 
