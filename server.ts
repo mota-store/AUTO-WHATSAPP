@@ -388,11 +388,12 @@ async function createWASession(userId: number, instanceId: number, phoneNumber?:
     const { connection, lastDisconnect, qr } = update
 
     if (qr) {
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qr)}`;
       await db.updateWhatsappInstance(instanceId, {
         status: 'connecting',
-        qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qr)}`,
+        qrCode: qrUrl,
       })
-      console.log('📱 [MOTA-FLOW] QR Code gerado.')
+      console.log('📱 [MOTA-FLOW] QR Code gerado e salvo no banco.');
     }
 
     if (connection === 'close') {

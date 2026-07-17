@@ -45,9 +45,11 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadData()
-    const interval = setInterval(loadData, 5000)
+    // Aumentar a frequência de busca quando estiver conectando para o QR aparecer mais rápido
+    const intervalTime = (instance?.status === 'connecting') ? 2000 : 5000;
+    const interval = setInterval(loadData, intervalTime)
     return () => clearInterval(interval)
-  }, [])
+  }, [instance?.status])
 
   useEffect(() => {
     if (!instance || !connectionActive) return
