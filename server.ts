@@ -27,12 +27,9 @@ const messageStates = new Map<string, { flowId: number, menuId: string, userId: 
 const app = express()
 const PORT = process.env.PORT || 3000
 
-console.log('🔍 [DEBUG] INSPEÇÃO PROFUNDA DE VARIÁVEIS:');
-const dbKeys = Object.keys(process.env).filter(k => k.includes("DATABASE"));
-console.log('🔍 [DEBUG] Chaves que contêm DATABASE:', dbKeys);
-dbKeys.forEach(k => console.log(`🔍 [DEBUG] Chave "${k}" valor presente:`, !!process.env[k]));
-console.log('🔍 [DEBUG] DATABASE_URL (acesso direto) presente:', !!process.env.DATABASE_URL);
-console.log('🔍 [DEBUG] NODE_ENV:', process.env.NODE_ENV);
+console.log('🔍 [DEBUG] INSPEÇÃO DE VARIÁVEIS (Object.keys):', Object.keys(process.env).filter(k => k.includes("DATABASE")));
+console.log('🔍 [DEBUG] DATABASE_URL =', !!process.env.DATABASE_URL);
+console.log('🔍 [DEBUG] NODE_ENV =', process.env.NODE_ENV);
 
 // Middleware
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }))
