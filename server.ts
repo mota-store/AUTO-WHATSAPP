@@ -132,38 +132,6 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
 })
 
 // Dashboard Route
-app.post('/api/whatsapp/pairing-code', authMiddleware, async (req: Request, res: Response) => {
-  try {
-    const user = (req as any).user as AuthPayload
-    const { phoneNumber } = req.body
-
-    if (!phoneNumber) {
-      return res.status(400).json({ message: 'Número de telefone é obrigatório' })
-    }
-
-    // Buscar ou criar instância
-    let instance = await db.getWhatsappInstance(user.userId)
-    if (!instance) {
-      await db.createWhatsappInstance(user.userId)
-      instance = await db.getWhatsappInstance(user.userId)
-    }
-
-    if (!instance) throw new Error('Falha ao gerenciar instância')
-
-    // Iniciar sessão de pareamento
-    const sock = await createPairingSession(user.userId, phoneNumber, instance.id)
-    
-    // O Baileys gera o código de pareamento de forma assíncrona
-    // Vamos aguardar o código ser gerado
-    const code = await sock.requestPairingCode(phoneNumber)
-
-    res.json({ code })
-  } catch (error: any) {
-    console.error('[PAIRING ERROR]', error)
-    res.status(500).json({ message: 'Erro ao gerar código de pareamento' })
-  }
-})
-
 app.get('/api/dashboard', authMiddleware, async (req: Request, res: Response) => {
   try {
     const user = (req as any).user as AuthPayload
@@ -362,25 +330,23 @@ function cleanSession(userId: number) {
   pairingCodeRequests.delete(userId)
 }
 
-// Helper para criar sessão WhatsApp via QR Code
-async function createQRSession(userId: number, instanceId: number) {
+// Helper para criar sessão WhatsApp (QR ou Pairing)
+async function createWASession(userId: number, instanceId: number, phoneNumber?: string) {
   const now = Date.now()
   const lastAttempt = lastConnectionAttempt.get(userId) || 0
   
-  if (now - lastAttempt < 120000) {
-    console.log(`⏳ [MOTA-FLOW] Aguardando trava de 2 minutos para usuário ${userId}`)
+  // Trava de segurança para evitar loops (exceto se for reconexão interna do Baileys)
+  if (now - lastAttempt < 60000 && !phoneNumber) {
+    console.log(`⏳ [MOTA-FLOW] Aguardando trava de 1 minuto para usuário ${userId}`)
     return sessions.get(userId)
   }
   
   lastConnectionAttempt.set(userId, now)
-  cleanSession(userId)
-
   const sessionPath = `sessions/session-${userId}`
 
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
   const { version } = await fetchLatestBaileysVersion()
 
-  // Configuração robusta com keepAlive e retry
   const sock = makeWASocket({
     version,
     auth: {
@@ -388,103 +354,17 @@ async function createQRSession(userId: number, instanceId: number) {
       keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
     },
     logger: pino({ level: 'silent' }),
-    browser: ['Ubuntu', 'Chrome', '110.0.5481.178'],
-    syncFullHistory: false,
-    connectTimeoutMs: 60000,
-    keepAliveIntervalMs: 10000,
-    maxMsgRetryCount: 5,
-    retryRequestDelayMs: 3000,
-  })
-
-  sessions.set(userId, sock)
-
-  sock.ev.on('creds.update', saveCreds)
-
-  // PROCESSAMENTO DE MENSAGENS REAIS
-  sock.ev.on('messages.upsert', async (m: any) => {
-    try {
-      const msg = m.messages[0]
-      if (!msg || msg.key.fromMe) return
-
-      // Buscar fluxos ativos do usuário
-      const flows = await db.getUserMenuFlows(userId)
-      const activeFlow = flows.find((f: any) => f.isActive)
-      if (!activeFlow) return
-
-      const flowData: MenuFlowData = activeFlow.flowData
-      if (!flowData || !flowData.menus || !flowData.rootMenuId) return
-
-      console.log(`📨 [MOTA-FLOW] Processando mensagem para flow: ${activeFlow.name}`)
-      await processMessage(sock, msg, userId, instanceId, flowData)
-    } catch (err) {
-      console.error('Erro ao processar mensagem:', err)
-    }
-  })
-
-  sock.ev.on('connection.update', async (update: ConnectionState) => {
-    const { connection, lastDisconnect, qr } = update
-
-    if (qr) {
-      // Salvar QR Code no banco - permanece FIXO até ser escaneado ou expirar
-      await db.updateWhatsappInstance(instanceId, {
-        status: 'connecting',
-        qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qr)}`,
-      })
-      console.log('📱 [MOTA-FLOW] QR Code gerado. Aguardando escaneamento...')
-    }
-
-    if (connection === 'close') {
-      const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut
-      
-      console.log(`📡 [MOTA-FLOW] Conexão fechada. Status: ${statusCode}. Reconectando: ${shouldReconnect}`)
-
-      if (shouldReconnect) {
-        // Se for erro 515 (Restart), tenta reconectar mais rápido, respeitando a trava de 2 min no createQRSession
-        setTimeout(() => createQRSession(userId, instanceId), 5000)
-      } else {
-        await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null })
-        cleanSession(userId)
-      }
-    } else if (connection === 'open') {
-      console.log('✅ [MOTA-FLOW] WhatsApp conectado com sucesso!')
-      await db.updateWhatsappInstance(instanceId, {
-        status: 'connected',
-        qrCode: null,
-        phoneNumber: sock.user?.id.split(':')[0]
-      })
-      pairingCodeRequests.delete(userId)
-      lastConnectionAttempt.delete(userId)
-    }
-  })
-
-  return sock
-}
-
-// Helper para criar sessão WhatsApp via Pairing Code
-async function createPairingSession(userId: number, phoneNumber: string, instanceId: number) {
-  cleanSession(userId)
-
-  const sessionPath = `sessions/session-${userId}`
-
-  const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
-
-  // Configuração robusta para pairing code
-  const sock = makeWASocket({
-    auth: state,
-    logger: pino({ level: 'silent' }),
     browser: Browsers.ubuntu('Chrome'),
-    connectTimeoutMs: 60000,
-    keepAliveIntervalMs: 10000,
+    syncFullHistory: false,
+    connectTimeoutMs: 120000, // Aumentado para 2 minutos
+    keepAliveIntervalMs: 15000,
     maxMsgRetryCount: 5,
-    retryRequestDelayMs: 3000,
+    retryRequestDelayMs: 5000,
   })
 
   sessions.set(userId, sock)
-
   sock.ev.on('creds.update', saveCreds)
 
-  // PROCESSAMENTO DE MENSAGENS REAIS
   sock.ev.on('messages.upsert', async (m: any) => {
     try {
       const msg = m.messages[0]
@@ -497,7 +377,6 @@ async function createPairingSession(userId: number, phoneNumber: string, instanc
       const flowData: MenuFlowData = activeFlow.flowData
       if (!flowData || !flowData.menus || !flowData.rootMenuId) return
 
-      console.log(`📨 [MOTA-FLOW] Processando mensagem para flow: ${activeFlow.name}`)
       await processMessage(sock, msg, userId, instanceId, flowData)
     } catch (err) {
       console.error('Erro ao processar mensagem:', err)
@@ -512,41 +391,29 @@ async function createPairingSession(userId: number, phoneNumber: string, instanc
         status: 'connecting',
         qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qr)}`,
       })
+      console.log('📱 [MOTA-FLOW] QR Code gerado.')
     }
 
     if (connection === 'close') {
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
       console.log(`📡 [MOTA-FLOW] Conexão fechada. Status: ${statusCode}`)
 
-      // Se não foi logout, tentar reconectar com backoff exponencial
-      if (statusCode !== DisconnectReason.loggedOut) {
-        const reqData = pairingCodeRequests.get(userId)
-        if (reqData && reqData.attempts < 3) {
-          reqData.attempts++
-          const delay = 5000 * reqData.attempts // 5s, 10s, 15s
-          console.log(`🔄 [MOTA-FLOW] Reconectando em ${delay}ms... (tentativa ${reqData.attempts}/3)`)
-
-          await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: null })
-
-          setTimeout(() => {
-            createPairingSession(userId, reqData.number, instanceId).then(async (newSock) => {
-              try {
-                const cleanNumber = reqData.number.replace(/\D/g, '')
-                console.log(`📲 [MOTA-FLOW] Solicitando novo Pairing Code: ${cleanNumber}`)
-                await newSock.waitForConnectionUpdate((update: ConnectionState) => update.connection === 'open', 10000)
-                const code = await newSock.requestPairingCode(cleanNumber)
-                console.log(`🔑 [MOTA-FLOW] Novo código gerado: ${code}`)
-              } catch (err) {
-                console.error('Erro ao regenerar código:', err)
-              }
-            })
-          }, delay)
-          return
+      const shouldReconnect = statusCode !== DisconnectReason.loggedOut
+      
+      if (shouldReconnect) {
+        // TRATAMENTO ESPECIAL PARA STATUS 515 (Restart Required)
+        if (statusCode === 515 || statusCode === 408) {
+          console.log('🔄 [MOTA-FLOW] Status crítico detectado (515/408). Reiniciando socket imediatamente...')
+          setTimeout(() => createWASession(userId, instanceId, phoneNumber), 2000)
+        } else {
+          console.log('🔄 [MOTA-FLOW] Tentando reconectar em 10s...')
+          setTimeout(() => createWASession(userId, instanceId, phoneNumber), 10000)
         }
+      } else {
+        await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null })
+        sessions.delete(userId)
+        cleanSession(userId)
       }
-
-      await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null })
-      sessions.delete(userId)
     } else if (connection === 'open') {
       console.log('✅ [MOTA-FLOW] WhatsApp conectado com sucesso!')
       await db.updateWhatsappInstance(instanceId, {
@@ -568,64 +435,43 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
     const user = (req as any).user as AuthPayload
     const { phoneNumber, usePairingCode } = req.body
 
-    // Verificar se já existe uma sessão ativa
-    const existingSession = sessions.get(user.userId)
-    if (existingSession) {
-      try { existingSession.logout() } catch (e) {}
-      sessions.delete(user.userId)
-    }
-
     let instance = await db.getWhatsappInstance(user.userId)
     if (!instance) {
       await db.createWhatsappInstance(user.userId)
       instance = await db.getWhatsappInstance(user.userId)
     }
 
-    const sessionId = user.userId
-
-    // Limpar status anterior
-    await db.updateWhatsappInstance(instance.id, {
-      status: 'connecting',
-      qrCode: null,
-      phoneNumber: null,
-    })
-
     if (usePairingCode && phoneNumber) {
       const cleanNumber = phoneNumber.replace(/\D/g, '')
-      const sock = await createPairingSession(sessionId, cleanNumber, instance.id)
-
-      pairingCodeRequests.set(sessionId, { number: cleanNumber, attempts: 0, timer: null })
-
-      // Aguardar inicialização completa do socket com backoff
+      console.log(`📲 [MOTA-FLOW] Iniciando Pairing para: ${cleanNumber}`)
+      
+      const sock = await createWASession(user.userId, instance.id, cleanNumber)
+      
+      // Tentar obter o código de pareamento com retry e timeout estendido
       let attempts = 0
-      const maxAttempts = 6 // até 30 segundos
-      const tryPairing = async () => {
-        attempts++
+      const getCode = async () => {
         try {
-          console.log(`📲 [MOTA-FLOW] Solicitando Pairing Code: ${cleanNumber} (tentativa ${attempts}/${maxAttempts})`)
+          // Aguardar o socket estar minimamente pronto
+          await new Promise(resolve => setTimeout(resolve, 3000))
           const code = await sock.requestPairingCode(cleanNumber)
           res.json({ pairingCode: code })
-        } catch (err) {
-          const error = err as any
-          const isClosed = error?.isBoom && (error.output?.statusCode === 428 || error.output?.statusCode === 408)
-          if (isClosed && attempts < maxAttempts) {
-            console.log(`⏳ [MOTA-FLOW] Conexão fechada, tentando novamente em 5s...`)
-            await db.updateWhatsappInstance(instance.id, { status: 'connecting', qrCode: null })
-            setTimeout(tryPairing, 5000)
+        } catch (err: any) {
+          attempts++
+          console.error(`❌ Erro ao pedir Pairing Code (tentativa ${attempts}):`, err.message)
+          if (attempts < 3) {
+            setTimeout(getCode, 5000)
           } else {
-            console.error('Erro no pareamento:', err)
-            res.status(500).json({ message: 'Erro ao gerar código. Tente novamente.' })
+            res.status(500).json({ message: 'WhatsApp demorou a responder. Tente novamente em 1 minuto.' })
           }
         }
       }
-
-      // Aguardar o socket estar pronto antes de pedir o código
-      setTimeout(tryPairing, 5000)
+      
+      getCode()
       return
     }
 
     // Conexão via QR Code
-    const sock = await createQRSession(sessionId, instance.id)
+    await createWASession(user.userId, instance.id)
     res.json({ message: 'Conexão iniciada. QR Code será gerado em instantes.' })
   } catch (error) {
     console.error(error)
@@ -644,20 +490,9 @@ app.post('/api/whatsapp/:instanceId/disconnect', authMiddleware, async (req: Req
       sessions.delete(user.userId)
     }
 
-    const pairingReq = pairingCodeRequests.get(user.userId)
-    if (pairingReq && pairingReq.timer) {
-      clearTimeout(pairingReq.timer)
-      pairingCodeRequests.delete(user.userId)
-    }
-
-    // Limpar estados de mensagens ao desconectar
-    messageStates.clear()
-
     cleanSession(user.userId)
-
     await db.updateWhatsappInstance(parseInt(instanceId), {
       status: 'disconnected',
-      sessionData: null,
       qrCode: null,
       phoneNumber: null,
     })
@@ -680,11 +515,7 @@ app.use(express.static('dist/client'))
 // Global Error Handler
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   console.error("❌ ERRO GLOBAL CAPTURADO:", err);
-  console.error(err.stack);
-  res.status(500).json({ 
-    message: err.message || 'Erro interno no servidor',
-    error: process.env.NODE_ENV === 'development' ? err : undefined
-  });
+  res.status(500).json({ message: err.message || 'Erro interno no servidor' });
 });
 
 app.get('*', (req: Request, res: Response) => {
@@ -693,21 +524,13 @@ app.get('*', (req: Request, res: Response) => {
 
 app.listen(PORT, async () => {
   console.log(`🚀 Servidor MOTA-FLOW rodando em http://localhost:${PORT}`)
-
-  // Sincronização automática do banco de dados em produção
-  if (process.env.NODE_ENV === 'production') {
-    if (!process.env.DATABASE_URL) {
-      console.error('❌ ERRO CRÍTICO: DATABASE_URL não configurada no ambiente de produção!');
-    } else {
-      try {
-        console.log('🔄 Sincronizando banco de dados via drizzle-kit push...');
-        const { stdout } = await execAsync('npx drizzle-kit push');
-        console.log('✅ Banco de dados sincronizado com sucesso!');
-        console.log(stdout);
-      } catch (error: any) {
-        console.error('⚠️ Aviso: Falha ao sincronizar via drizzle-kit push:', error.message);
-        // Não interromper o boot, pois o banco pode já estar pronto
-      }
+  if (process.env.NODE_ENV === 'production' && process.env.DATABASE_URL) {
+    try {
+      console.log('🔄 Sincronizando banco de dados...');
+      await execAsync('npx drizzle-kit push');
+      console.log('✅ Banco de dados sincronizado!');
+    } catch (error: any) {
+      console.error('⚠️ Aviso: Falha ao sincronizar banco:', error.message);
     }
   }
 })
