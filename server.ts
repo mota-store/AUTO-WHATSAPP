@@ -84,9 +84,10 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
         name: newUser.name
       }
     })
-    } catch (error) {
-    console.error('[REGISTER ERROR]', error instanceof Error ? error.stack : error)
-    res.status(500).json({ message: 'Erro ao criar usuário' })
+    } catch (error: any) {
+    console.error('[REGISTER ERROR]', error);
+    console.error(error?.stack);
+    res.status(500).json({ message: error.message || 'Erro ao criar usuário' })
   }
 })
 
@@ -118,9 +119,10 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
         name: user.name,
       },
     })
-    } catch (error) {
-    console.error('[LOGIN ERROR]', error instanceof Error ? error.stack : error)
-    res.status(500).json({ message: 'Erro ao fazer login' })
+    } catch (error: any) {
+    console.error('[LOGIN ERROR]', error);
+    console.error(error?.stack);
+    res.status(500).json({ message: error.message || 'Erro ao fazer login' })
   }
 })
 
@@ -135,9 +137,10 @@ app.get('/api/dashboard', authMiddleware, async (req: Request, res: Response) =>
       instance,
       flows,
     })
-    } catch (error) {
-    console.error('[DASHBOARD ERROR]', error instanceof Error ? error.stack : error)
-    res.status(500).json({ message: 'Erro ao carregar dashboard' })
+    } catch (error: any) {
+    console.error('[DASHBOARD ERROR]', error);
+    console.error(error?.stack);
+    res.status(500).json({ message: error.message || 'Erro ao carregar dashboard' })
   }
 })
 
@@ -154,9 +157,10 @@ app.post('/api/flows', authMiddleware, async (req: Request, res: Response) => {
     await db.createMenuFlow(user.userId, name, description, flowData)
 
     res.json({ message: 'Fluxo criado com sucesso' })
-    } catch (error) {
-    console.error('[CREATE FLOW ERROR]', error instanceof Error ? error.stack : error)
-    res.status(500).json({ message: 'Erro ao criar fluxo' })
+    } catch (error: any) {
+    console.error('[CREATE FLOW ERROR]', error);
+    console.error(error?.stack);
+    res.status(500).json({ message: error.message || 'Erro ao criar fluxo' })
   }
 })
 
@@ -618,6 +622,17 @@ app.get('/api/health', (req: Request, res: Response) => {
 
 // Serve frontend
 app.use(express.static('dist/client'))
+
+// Global Error Handler
+app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  console.error("❌ ERRO GLOBAL CAPTURADO:", err);
+  console.error(err.stack);
+  res.status(500).json({ 
+    message: err.message || 'Erro interno no servidor',
+    error: process.env.NODE_ENV === 'development' ? err : undefined
+  });
+});
+
 app.get('*', (req: Request, res: Response) => {
   res.sendFile('dist/client/index.html', { root: '.' })
 })
