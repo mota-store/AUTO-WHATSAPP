@@ -309,7 +309,7 @@ async function createWhatsAppSession(userId: number, phoneNumber: string, instan
   const sock = makeWASocket({
     auth: state,
     logger: pino({ level: 'silent' }),
-    browser: ['Ubuntu', 'Chrome', '110.0.5481.178'],
+    browser: ['Chrome (Linux)', 'Ubuntu', '22.04 LTS', 'jaeger'],
   })
 
   sessions.set(userId, sock)
