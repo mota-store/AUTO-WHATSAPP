@@ -18,6 +18,7 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys'
 import pino from 'pino'
 import { Boom } from '@hapi/boom'
+import type { ConnectionState, WAConnectionState } from '@whiskeysockets/baileys'
 
 const execAsync = promisify(exec)
 const sessions = new Map<number, any>()
@@ -306,19 +307,26 @@ function buildMenuMessage(menu: MenuNode): string {
   return message.trim()
 }
 
-// Helper para criar sessão WhatsApp via QR Code (configuração exata do bot que funciona)
-async function createQRSession(userId: number, instanceId: number) {
+// Helper para limpar sessão completamente
+function cleanSession(userId: number) {
   const sessionPath = `sessions/session-${userId}`
-
-  // Limpeza da sessão anterior
   if (fs.existsSync(sessionPath)) {
     try { fs.rmSync(sessionPath, { recursive: true, force: true }) } catch (e) {}
   }
+  sessions.delete(userId)
+  pairingCodeRequests.delete(userId)
+}
+
+// Helper para criar sessão WhatsApp via QR Code
+async function createQRSession(userId: number, instanceId: number) {
+  cleanSession(userId)
+
+  const sessionPath = `sessions/session-${userId}`
 
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
   const { version } = await fetchLatestBaileysVersion()
 
-  // Mesma configuração do qr.js que funciona
+  // Configuração robusta com keepAlive e retry
   const sock = makeWASocket({
     version,
     auth: {
@@ -328,6 +336,10 @@ async function createQRSession(userId: number, instanceId: number) {
     logger: pino({ level: 'silent' }),
     browser: ['Ubuntu', 'Chrome', '110.0.5481.178'],
     syncFullHistory: false,
+    connectTimeoutMs: 30000,
+    keepAliveIntervalMs: 10000,
+    maxMsgRetryCount: 5,
+    retryRequestDelayMs: 3000,
   })
 
   sessions.set(userId, sock)
@@ -355,7 +367,7 @@ async function createQRSession(userId: number, instanceId: number) {
     }
   })
 
-  sock.ev.on('connection.update', async (update) => {
+  sock.ev.on('connection.update', async (update: ConnectionState) => {
     const { connection, lastDisconnect, qr } = update
 
     if (qr) {
@@ -364,17 +376,15 @@ async function createQRSession(userId: number, instanceId: number) {
         status: 'connecting',
         qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qr)}`,
       })
+      console.log('📱 [MOTA-FLOW] QR Code gerado. Aguardando escaneamento...')
     }
 
     if (connection === 'close') {
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
       console.log(`📡 [MOTA-FLOW] Conexão fechada. Status: ${statusCode}`)
 
-      // ATUALIZAR STATUS NO BANCO MAS NÃO RECONNECTAR AUTOMATICAMENTE
-      // O usuário precisa clicar em "Reconectar" no Dashboard
+      // Atualizar status no banco
       await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null })
-
-      // Limpar sessão do mapa
       sessions.delete(userId)
     } else if (connection === 'open') {
       console.log('✅ [MOTA-FLOW] WhatsApp conectado com sucesso!')
@@ -390,22 +400,23 @@ async function createQRSession(userId: number, instanceId: number) {
   return sock
 }
 
-// Helper para criar sessão WhatsApp via Pairing Code (configuração exata do bot que funciona)
+// Helper para criar sessão WhatsApp via Pairing Code
 async function createPairingSession(userId: number, phoneNumber: string, instanceId: number) {
-  const sessionPath = `sessions/session-${userId}`
+  cleanSession(userId)
 
-  // Limpeza da sessão anterior
-  if (fs.existsSync(sessionPath)) {
-    try { fs.rmSync(sessionPath, { recursive: true, force: true }) } catch (e) {}
-  }
+  const sessionPath = `sessions/session-${userId}`
 
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
 
-  // Mesma configuração do numero.js que funciona
+  // Configuração robusta para pairing code
   const sock = makeWASocket({
     auth: state,
     logger: pino({ level: 'silent' }),
     browser: Browsers.ubuntu('Chrome'),
+    connectTimeoutMs: 30000,
+    keepAliveIntervalMs: 10000,
+    maxMsgRetryCount: 5,
+    retryRequestDelayMs: 3000,
   })
 
   sessions.set(userId, sock)
@@ -432,7 +443,7 @@ async function createPairingSession(userId: number, phoneNumber: string, instanc
     }
   })
 
-  sock.ev.on('connection.update', async (update) => {
+  sock.ev.on('connection.update', async (update: ConnectionState) => {
     const { connection, lastDisconnect, qr } = update
 
     if (qr) {
@@ -446,22 +457,31 @@ async function createPairingSession(userId: number, phoneNumber: string, instanc
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
       console.log(`📡 [MOTA-FLOW] Conexão fechada. Status: ${statusCode}`)
 
+      // Se não foi logout, tentar reconectar com backoff exponencial
       if (statusCode !== DisconnectReason.loggedOut) {
-        // Reconectar automaticamente para pairing code (igual ao numero.js)
-        console.log(`🔄 [MOTA-FLOW] Reconectando...`)
-        setTimeout(() => {
-          createPairingSession(userId, phoneNumber, instanceId).then(() => {
-            setTimeout(async () => {
+        const reqData = pairingCodeRequests.get(userId)
+        if (reqData && reqData.attempts < 3) {
+          reqData.attempts++
+          const delay = 5000 * reqData.attempts // 5s, 10s, 15s
+          console.log(`🔄 [MOTA-FLOW] Reconectando em ${delay}ms... (tentativa ${reqData.attempts}/3)`)
+
+          await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: null })
+
+          setTimeout(() => {
+            createPairingSession(userId, reqData.number, instanceId).then(async (newSock) => {
               try {
-                const cleanNumber = phoneNumber.replace(/\D/g, '')
-                const code = await sock.requestPairingCode(cleanNumber)
+                const cleanNumber = reqData.number.replace(/\D/g, '')
+                console.log(`📲 [MOTA-FLOW] Solicitando novo Pairing Code: ${cleanNumber}`)
+                await newSock.waitForConnectionUpdate((update: ConnectionState) => update.connection === 'open', 10000)
+                const code = await newSock.requestPairingCode(cleanNumber)
                 console.log(`🔑 [MOTA-FLOW] Novo código gerado: ${code}`)
               } catch (err) {
                 console.error('Erro ao regenerar código:', err)
               }
-            }, 5000)
-          })
-        }, 5000)
+            })
+          }, delay)
+          return
+        }
       }
 
       await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null })
@@ -489,9 +509,7 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
     // Verificar se já existe uma sessão ativa
     const existingSession = sessions.get(user.userId)
     if (existingSession) {
-      try {
-        existingSession.logout()
-      } catch (e) {}
+      try { existingSession.logout() } catch (e) {}
       sessions.delete(user.userId)
     }
 
@@ -514,23 +532,37 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
       const cleanNumber = phoneNumber.replace(/\D/g, '')
       const sock = await createPairingSession(sessionId, cleanNumber, instance.id)
 
-      pairingCodeRequests.set(sessionId, { number: cleanNumber, attempts: 1, timer: null })
+      pairingCodeRequests.set(sessionId, { number: cleanNumber, attempts: 0, timer: null })
 
-      // Aguardar inicialização completa do socket (igual ao numero.js)
-      setTimeout(async () => {
+      // Aguardar inicialização completa do socket com backoff
+      let attempts = 0
+      const maxAttempts = 6 // até 30 segundos
+      const tryPairing = async () => {
+        attempts++
         try {
-          console.log(`📲 [MOTA-FLOW] Solicitando Pairing Code: ${cleanNumber}`)
+          console.log(`📲 [MOTA-FLOW] Solicitando Pairing Code: ${cleanNumber} (tentativa ${attempts}/${maxAttempts})`)
           const code = await sock.requestPairingCode(cleanNumber)
           res.json({ pairingCode: code })
         } catch (err) {
-          console.error('Erro no pareamento:', err)
-          res.status(500).json({ message: 'Erro ao gerar código. Tente novamente em 10 segundos.' })
+          const error = err as any
+          const isClosed = error?.isBoom && (error.output?.statusCode === 428 || error.output?.statusCode === 408)
+          if (isClosed && attempts < maxAttempts) {
+            console.log(`⏳ [MOTA-FLOW] Conexão fechada, tentando novamente em 5s...`)
+            await db.updateWhatsappInstance(instance.id, { status: 'connecting', qrCode: null })
+            setTimeout(tryPairing, 5000)
+          } else {
+            console.error('Erro no pareamento:', err)
+            res.status(500).json({ message: 'Erro ao gerar código. Tente novamente.' })
+          }
         }
-      }, 5000)
+      }
+
+      // Aguardar o socket estar pronto antes de pedir o código
+      setTimeout(tryPairing, 5000)
       return
     }
 
-    // Conexão via QR Code (igual ao qr.js)
+    // Conexão via QR Code
     const sock = await createQRSession(sessionId, instance.id)
     res.json({ message: 'Conexão iniciada. QR Code será gerado em instantes.' })
   } catch (error) {
@@ -559,12 +591,7 @@ app.post('/api/whatsapp/:instanceId/disconnect', authMiddleware, async (req: Req
     // Limpar estados de mensagens ao desconectar
     messageStates.clear()
 
-    const sessionPath = `sessions/session-${user.userId}`
-    if (fs.existsSync(sessionPath)) {
-      try {
-        fs.rmSync(sessionPath, { recursive: true, force: true })
-      } catch (e) { }
-    }
+    cleanSession(user.userId)
 
     await db.updateWhatsappInstance(parseInt(instanceId), {
       status: 'disconnected',
