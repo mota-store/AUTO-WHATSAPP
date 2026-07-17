@@ -11,7 +11,10 @@ import fs from 'fs'
 import makeWASocket, {
   DisconnectReason,
   useMultiFileAuthState,
-  WAMessage
+  WAMessage,
+  Browsers,
+  makeCacheableSignalKeyStore,
+  fetchLatestBaileysVersion
 } from '@whiskeysockets/baileys'
 import pino from 'pino'
 import { Boom } from '@hapi/boom'
@@ -293,9 +296,8 @@ function buildMenuMessage(menu: MenuNode): string {
   return message.trim()
 }
 
-// Helper para criar sessão WhatsApp
-// IMPORTANTE: NÃO reconecta automaticamente. Só conecta quando o usuário solicita.
-async function createWhatsAppSession(userId: number, phoneNumber: string, instanceId: number) {
+// Helper para criar sessão WhatsApp via QR Code (configuração exata do bot que funciona)
+async function createQRSession(userId: number, instanceId: number) {
   const sessionPath = `sessions/session-${userId}`
 
   // Limpeza da sessão anterior
@@ -304,12 +306,18 @@ async function createWhatsAppSession(userId: number, phoneNumber: string, instan
   }
 
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
+  const { version } = await fetchLatestBaileysVersion()
 
-  // Conexão simplificada igual ao bot que funciona
+  // Mesma configuração do qr.js que funciona
   const sock = makeWASocket({
-    auth: state,
+    version,
+    auth: {
+      creds: state.creds,
+      keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
+    },
     logger: pino({ level: 'silent' }),
     browser: ['Ubuntu', 'Chrome', '110.0.5481.178'],
+    syncFullHistory: false,
   })
 
   sessions.set(userId, sock)
@@ -372,6 +380,96 @@ async function createWhatsAppSession(userId: number, phoneNumber: string, instan
   return sock
 }
 
+// Helper para criar sessão WhatsApp via Pairing Code (configuração exata do bot que funciona)
+async function createPairingSession(userId: number, phoneNumber: string, instanceId: number) {
+  const sessionPath = `sessions/session-${userId}`
+
+  // Limpeza da sessão anterior
+  if (fs.existsSync(sessionPath)) {
+    try { fs.rmSync(sessionPath, { recursive: true, force: true }) } catch (e) {}
+  }
+
+  const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
+
+  // Mesma configuração do numero.js que funciona
+  const sock = makeWASocket({
+    auth: state,
+    logger: pino({ level: 'silent' }),
+    browser: Browsers.ubuntu('Chrome'),
+  })
+
+  sessions.set(userId, sock)
+
+  sock.ev.on('creds.update', saveCreds)
+
+  // PROCESSAMENTO DE MENSAGENS REAIS
+  sock.ev.on('messages.upsert', async (m: any) => {
+    try {
+      const msg = m.messages[0]
+      if (!msg || msg.key.fromMe) return
+
+      const flows = await db.getUserMenuFlows(userId)
+      const activeFlow = flows.find((f: any) => f.isActive)
+      if (!activeFlow) return
+
+      const flowData: MenuFlowData = activeFlow.flowData
+      if (!flowData || !flowData.menus || !flowData.rootMenuId) return
+
+      console.log(`📨 [MOTA-FLOW] Processando mensagem para flow: ${activeFlow.name}`)
+      await processMessage(sock, msg, userId, instanceId, flowData)
+    } catch (err) {
+      console.error('Erro ao processar mensagem:', err)
+    }
+  })
+
+  sock.ev.on('connection.update', async (update) => {
+    const { connection, lastDisconnect, qr } = update
+
+    if (qr) {
+      await db.updateWhatsappInstance(instanceId, {
+        status: 'connecting',
+        qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qr)}`,
+      })
+    }
+
+    if (connection === 'close') {
+      const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
+      console.log(`📡 [MOTA-FLOW] Conexão fechada. Status: ${statusCode}`)
+
+      if (statusCode !== DisconnectReason.loggedOut) {
+        // Reconectar automaticamente para pairing code (igual ao numero.js)
+        console.log(`🔄 [MOTA-FLOW] Reconectando...`)
+        setTimeout(() => {
+          createPairingSession(userId, phoneNumber, instanceId).then(() => {
+            setTimeout(async () => {
+              try {
+                const cleanNumber = phoneNumber.replace(/\D/g, '')
+                const code = await sock.requestPairingCode(cleanNumber)
+                console.log(`🔑 [MOTA-FLOW] Novo código gerado: ${code}`)
+              } catch (err) {
+                console.error('Erro ao regenerar código:', err)
+              }
+            }, 5000)
+          })
+        }, 5000)
+      }
+
+      await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null })
+      sessions.delete(userId)
+    } else if (connection === 'open') {
+      console.log('✅ [MOTA-FLOW] WhatsApp conectado com sucesso!')
+      await db.updateWhatsappInstance(instanceId, {
+        status: 'connected',
+        qrCode: null,
+        phoneNumber: sock.user?.id.split(':')[0]
+      })
+      pairingCodeRequests.delete(userId)
+    }
+  })
+
+  return sock
+}
+
 // WhatsApp Routes
 app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Response) => {
   try {
@@ -403,12 +501,12 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
     })
 
     if (usePairingCode && phoneNumber) {
-      const sock = await createWhatsAppSession(sessionId, phoneNumber, instance.id)
-
       const cleanNumber = phoneNumber.replace(/\D/g, '')
+      const sock = await createPairingSession(sessionId, cleanNumber, instance.id)
+
       pairingCodeRequests.set(sessionId, { number: cleanNumber, attempts: 1, timer: null })
 
-      // Aguardar inicialização completa do socket
+      // Aguardar inicialização completa do socket (igual ao numero.js)
       setTimeout(async () => {
         try {
           console.log(`📲 [MOTA-FLOW] Solicitando Pairing Code: ${cleanNumber}`)
@@ -422,8 +520,8 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
       return
     }
 
-    // Conexão via QR Code
-    const sock = await createWhatsAppSession(sessionId, '', instance.id)
+    // Conexão via QR Code (igual ao qr.js)
+    const sock = await createQRSession(sessionId, instance.id)
     res.json({ message: 'Conexão iniciada. QR Code será gerado em instantes.' })
   } catch (error) {
     console.error(error)
