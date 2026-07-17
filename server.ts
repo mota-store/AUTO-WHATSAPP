@@ -212,6 +212,16 @@ async function processMessage(sock: any, msg: any, userId: number, instanceId: n
 
   console.log(`💬 [MOTA-FLOW] Mensagem de ${sender}: ${messageText}`)
 
+  // Comando especial: /ping
+  if (messageText.trim().toLowerCase() === 'ping') {
+    const startTime = Date.now()
+    await sock.sendMessage(sender, { text: 'Calculando...' })
+    const endTime = Date.now()
+    const ms = endTime - startTime
+    await sock.sendMessage(sender, { text: `🏓 *Pong!* — Resposta em *${ms}ms*` })
+    return
+  }
+
   // Determinar o estado atual do chat
   let state = messageStates.get(chatId)
 
