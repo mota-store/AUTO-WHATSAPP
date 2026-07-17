@@ -621,18 +621,17 @@ app.get('*', (req: Request, res: Response) => {
 app.listen(PORT, async () => {
   console.log(`🚀 Servidor MOTA-FLOW rodando em http://localhost:${PORT}`)
 
-  if (process.env.NODE_ENV === 'production' || process.env.DATABASE_URL) {
+  // Sincronização automática do banco de dados em produção
+  if (process.env.NODE_ENV === 'production' && process.env.DATABASE_URL) {
     try {
-      console.log('🔄 Sincronizando banco de dados...')
-      const databaseUrl = process.env.DATABASE_URL || ''
-      const sslUrl = databaseUrl.includes('?')
-        ? `${databaseUrl}&ssl={"rejectUnauthorized":true}`
-        : `${databaseUrl}?ssl={"rejectUnauthorized":true}`
-
-      const { stdout } = await execAsync(`DATABASE_URL='${sslUrl}' npx drizzle-kit push`)
+      console.log('🔄 Sincronizando banco de dados via drizzle-kit push...')
+      // No Railway, o comando npx drizzle-kit push deve usar a DATABASE_URL do ambiente
+      const { stdout } = await execAsync('npx drizzle-kit push')
       console.log('✅ Banco de dados sincronizado com sucesso!')
+      console.log(stdout)
     } catch (error) {
       console.error('❌ Erro ao sincronizar banco de dados:', error)
+      // Não interromper o boot se o push falhar, pois as tabelas podem já existir
     }
   }
 })

@@ -6,6 +6,9 @@ export default defineConfig({
   dialect: "mysql",
   dbCredentials: {
     url: process.env.DATABASE_URL || "mysql://root:password@localhost:3306/auto_whatsapp",
+    ssl: {
+      rejectUnauthorized: true
+    }
   },
   migrations: {
     prefix: "timestamp",

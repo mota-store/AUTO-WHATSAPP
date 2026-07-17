@@ -11,33 +11,15 @@ export async function getDb() {
     
     // Extrair informações da URL para garantir que o banco de dados seja selecionado
     // mysql://user:pass@host:port/db_name
-    const urlPattern = /^mysql:\/\/(.+):(.+)@(.+):(\d+)\/(.+)$/
-    const urlWithoutQuery = databaseUrl.split('?')[0]
-    const match = urlWithoutQuery.match(urlPattern)
-    
-    let connectionConfig: any
-
-    if (match) {
-      const [, user, password, host, port, database] = match
-      connectionConfig = {
-        host,
-        port: parseInt(port),
-        user,
-        password,
-        database,
-        ssl: {
-          rejectUnauthorized: true
-        }
-      }
-    } else {
-      connectionConfig = {
-        uri: databaseUrl,
-        ssl: {
-          rejectUnauthorized: true
-        }
+    const connectionConfig: any = {
+      uri: databaseUrl,
+      ssl: {
+        rejectUnauthorized: true
       }
     }
 
+    // Se a URL contém parâmetros de query, o mysql2/promise prefere que passemos a URI direta
+    // Mas para o TiDB Cloud, às vezes é necessário garantir o SSL explicitamente no config
     const connection = await mysql.createConnection(connectionConfig)
     db = drizzle(connection, { schema, mode: 'default' })
   }
