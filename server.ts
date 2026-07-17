@@ -4,7 +4,10 @@ import cors from 'cors'
 import { createToken, verifyPassword, hashPassword, verifyToken, extractToken } from './src/server/utils'
 import * as db from './src/server/db'
 import { AuthPayload, CreateFlowRequest, UpdateFlowRequest } from './src/server/types'
+import { exec } from 'child_process'
+import { promisify } from 'util'
 
+const execAsync = promisify(exec)
 const app = express()
 const PORT = process.env.PORT || 3000
 
@@ -201,6 +204,18 @@ app.get('*', (req: Request, res: Response) => {
   res.sendFile('dist/client/index.html', { root: '.' })
 })
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 Servidor rodando em http://localhost:${PORT}`)
+  
+  // Tentar sincronizar o banco de dados automaticamente no boot
+  if (process.env.NODE_ENV === 'production') {
+    try {
+      console.log('🔄 Sincronizando banco de dados...')
+      const { stdout, stderr } = await execAsync('npx drizzle-kit push')
+      console.log('✅ Banco de dados sincronizado:', stdout)
+      if (stderr) console.error('⚠️ Aviso na sincronização:', stderr)
+    } catch (error) {
+      console.error('❌ Erro ao sincronizar banco de dados:', error)
+    }
+  }
 })
