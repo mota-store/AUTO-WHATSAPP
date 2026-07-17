@@ -6,11 +6,14 @@ import * as db from './src/server/db'
 import { AuthPayload, CreateFlowRequest, UpdateFlowRequest } from './src/server/types'
 import { exec } from 'child_process'
 import { promisify } from 'util'
+import fs from 'fs'
+import path from 'path'
 import makeWASocket, { 
   DisconnectReason, 
   useMultiFileAuthState, 
   fetchLatestBaileysVersion,
-  makeCacheableSignalKeyStore
+  makeCacheableSignalKeyStore,
+  Browsers
 } from '@whiskeysockets/baileys'
 import pino from 'pino'
 import { Boom } from '@hapi/boom'
@@ -209,7 +212,18 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
     }
 
     const sessionId = user.userId
-    const { state, saveCreds } = await useMultiFileAuthState(`sessions/session-${sessionId}`)
+    const sessionPath = `sessions/session-${sessionId}`
+
+    // Se estiver tentando reconectar e já houver uma sessão, limpar para evitar erros de pareamento
+    if (usePairingCode && fs.existsSync(sessionPath)) {
+      try {
+        fs.rmSync(sessionPath, { recursive: true, force: true })
+      } catch (e) {
+        console.error('Erro ao limpar sessão antiga:', e)
+      }
+    }
+
+    const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
     const { version } = await fetchLatestBaileysVersion()
 
     const sock = makeWASocket({
@@ -220,10 +234,12 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
         keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
       },
       logger: pino({ level: 'silent' }),
-      browser: ['MotaFlow', 'Chrome', '1.0.0'],
+      // Usar identificação de navegador mais estável (Ubuntu/Chrome)
+      browser: Browsers.ubuntu('Chrome'),
       connectTimeoutMs: 60000,
       defaultQueryTimeoutMs: 0,
-      keepAliveIntervalMs: 10000,
+      keepAliveIntervalMs: 30000, // Aumentar para manter a conexão mais estável
+      retryRequestDelayMs: 5000,
     })
 
     sessions.set(sessionId, sock)
@@ -249,7 +265,7 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
         await db.updateWhatsappInstance(instance!.id, { status: 'disconnected', qrCode: null })
         
         if (shouldReconnect) {
-          // Lógica de reconexão poderia ser implementada aqui se necessário
+          // Lógica de reconexão automática poderia ser implementada aqui
         }
       } else if (connection === 'open') {
         console.log('✅ WhatsApp conectado com sucesso!')
@@ -262,17 +278,18 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
     })
 
     if (usePairingCode && phoneNumber) {
-      // Aguardar inicialização do socket antes de pedir pairing code
+      // Aguardar inicialização completa do socket antes de pedir pairing code
       setTimeout(async () => {
         try {
           const cleanNumber = phoneNumber.replace(/\D/g, '')
+          console.log(`📲 Solicitando Pairing Code para: ${cleanNumber}`)
           const code = await sock.requestPairingCode(cleanNumber)
           res.json({ pairingCode: code })
         } catch (err) {
           console.error('Erro ao gerar pairing code:', err)
-          res.status(500).json({ message: 'Erro ao gerar código de pareamento' })
+          res.status(500).json({ message: 'Erro ao gerar código de pareamento. Tente novamente em instantes.' })
         }
-      }, 3000)
+      }, 5000) // Aumentar o delay para 5 segundos para garantir prontidão do socket
       return
     }
 
@@ -293,6 +310,14 @@ app.post('/api/whatsapp/:instanceId/disconnect', authMiddleware, async (req: Req
     if (sock) {
       try { sock.logout() } catch (e) {}
       sessions.delete(user.userId)
+    }
+
+    // Limpar arquivos de sessão ao desconectar manualmente
+    const sessionPath = `sessions/session-${user.userId}`
+    if (fs.existsSync(sessionPath)) {
+      try {
+        fs.rmSync(sessionPath, { recursive: true, force: true })
+      } catch (e) {}
     }
 
     await db.updateWhatsappInstance(parseInt(instanceId), {
