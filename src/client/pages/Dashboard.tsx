@@ -366,9 +366,12 @@ export default function Dashboard() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
-        <div className="relative">
-          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-primary"></div>
-          <Wifi className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-primary w-6 h-6 animate-pulse" />
+        <div className="text-center">
+          <div className="relative inline-block mb-4">
+            <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-primary"></div>
+            <Wifi className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-primary w-6 h-6 animate-pulse" />
+          </div>
+          <p className="text-muted-foreground font-bold animate-pulse">Carregando MOTA-FLOW...</p>
         </div>
       </div>
     )

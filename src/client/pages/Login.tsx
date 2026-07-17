@@ -78,7 +78,7 @@ export default function Login() {
             </div>
 
             <div className="space-y-2">
-              <div className="flex justify-between items-center ml-1">
+              <div className="flex justify-between items-center ml-1 mb-1">
                 <label className="text-xs font-black text-muted-foreground uppercase tracking-widest">Senha</label>
                 <a href="#" className="text-[10px] font-black text-primary hover:underline uppercase tracking-tighter">Esqueceu a senha?</a>
               </div>
@@ -97,7 +97,7 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-muted-foreground hover:text-primary transition-smooth btn-touch"
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-muted-foreground hover:text-primary transition-smooth btn-touch z-20"
                 >
                   {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
