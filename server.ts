@@ -64,10 +64,14 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     }
 
     const passwordHash = await hashPassword(password)
-    await db.createUser(email, passwordHash, name)
-
+    const result = await db.createUser(email, passwordHash, name)
+    
+    // Buscar o usuário recém-criado
     const newUser = await db.getUserByEmail(email)
-    if (!newUser) throw new Error('Erro ao recuperar usuário após criação')
+    if (!newUser) {
+      console.error('[REGISTER ERROR] Falha ao recuperar usuário após insert:', result)
+      throw new Error('Erro ao recuperar usuário após criação')
+    }
 
     const token = await createToken(newUser.id, newUser.email)
 
