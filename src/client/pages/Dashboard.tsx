@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { LogOut, Plus, Eye, Edit2, Trash2, RefreshCw, Wifi, WifiOff, Smartphone, QrCode, Copy, ExternalLink } from 'lucide-react'
+import { LogOut, Plus, Eye, Edit2, Trash2, RefreshCw, Wifi, WifiOff, Smartphone, QrCode, Copy, ExternalLink, X, Check, AlertTriangle } from 'lucide-react'
 import ThemeToggle from '../components/ThemeToggle'
 
 interface WhatsappInstance {
@@ -19,6 +19,14 @@ interface MenuFlow {
   createdAt: string
 }
 
+interface ConnectionLog {
+  message: string
+  status: 'info' | 'success' | 'error' | 'warning'
+  time: string
+}
+
+type ConnectionMethod = 'qr' | 'pairing' | null
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const [instance, setInstance] = useState<WhatsappInstance | null>(null)
@@ -28,11 +36,83 @@ export default function Dashboard() {
   const [pairingCode, setPairingCode] = useState('')
   const [isConnecting, setIsConnecting] = useState(false)
 
+  // Connection Screen state
+  const [showConnectionScreen, setShowConnectionScreen] = useState(false)
+  const [connectionMethod, setConnectionMethod] = useState<ConnectionMethod>(null)
+  const [progress, setProgress] = useState(0)
+  const [logs, setLogs] = useState<ConnectionLog[]>([])
+  const [connectionError, setConnectionError] = useState('')
+  const logsEndRef = useRef<HTMLDivElement>(null)
+  const prevStatusRef = useRef<string>('')
+
   useEffect(() => {
     loadData()
     const interval = setInterval(loadData, 5000)
     return () => clearInterval(interval)
   }, [])
+
+  // Monitor status changes for connection screen
+  useEffect(() => {
+    if (!instance) return
+
+    const currentStatus = instance.status
+    const prevStatus = prevStatusRef.current
+
+    // When status changes to "connecting", show connection screen
+    if (currentStatus === 'connecting' && prevStatus === 'disconnected') {
+      setShowConnectionScreen(true)
+      setConnectionError('')
+      setProgress(10)
+      const method = instance.qrCode ? 'qr' : 'pairing'
+      setConnectionMethod(method)
+      addLog(`Iniciando conexão via ${method === 'qr' ? 'QR Code' : 'Pairing Code'}...`, 'info')
+    }
+
+    // Update progress based on status and presence of QR code
+    if (showConnectionScreen && currentStatus === 'connecting') {
+      if (instance.qrCode && progress < 40) {
+        setProgress(40)
+        addLog('QR Code gerado! Aguardando escaneamento...', 'info')
+      }
+      if (pairingCode && progress < 40) {
+        setProgress(40)
+        addLog(`Código de pareamento gerado: ${pairingCode}`, 'info')
+      }
+    }
+
+    // When status changes to "connected", complete the screen
+    if (currentStatus === 'connected' && prevStatus !== 'connected') {
+      setProgress(100)
+      addLog('WhatsApp conectado com sucesso!', 'success')
+      setTimeout(() => {
+        setShowConnectionScreen(false)
+        setConnectionMethod(null)
+        setProgress(0)
+        setLogs([])
+        loadData()
+      }, 2000)
+    }
+
+    // When status changes to "disconnected" during connection, show error
+    if (currentStatus === 'disconnected' && prevStatus === 'connecting' && showConnectionScreen) {
+      setConnectionError('A conexão foi interrompida. Verifique os logs do servidor.')
+      addLog('Erro: Conexão interrompida', 'error')
+      setProgress(0)
+    }
+
+    prevStatusRef.current = currentStatus
+  }, [instance, pairingCode, showConnectionScreen])
+
+  // Auto-scroll logs
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [logs])
+
+  const addLog = (message: string, status: ConnectionLog['status']) => {
+    const now = new Date()
+    const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`
+    setLogs(prev => [...prev, { message, status, time }])
+  }
 
   const loadData = async () => {
     try {
@@ -69,13 +149,14 @@ export default function Dashboard() {
 
     setIsConnecting(true)
     setPairingCode('')
+    prevStatusRef.current = 'disconnected' // Reset previous status
     try {
       const token = localStorage.getItem('token')
       const response = await fetch('/api/whatsapp/connect', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}` 
+          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({ phoneNumber, usePairingCode })
       })
@@ -84,9 +165,6 @@ export default function Dashboard() {
       if (response.ok) {
         if (data.pairingCode) {
           setPairingCode(data.pairingCode)
-          toast.success('Código de pareamento gerado!')
-        } else {
-          toast.success('Iniciando geração do QR Code...')
         }
         loadData()
       } else {
@@ -112,6 +190,10 @@ export default function Dashboard() {
       if (response.ok) {
         toast.success('WhatsApp desconectado')
         setPairingCode('')
+        setShowConnectionScreen(false)
+        setConnectionMethod(null)
+        setProgress(0)
+        setLogs([])
         loadData()
       }
     } catch (error) {
@@ -141,6 +223,140 @@ export default function Dashboard() {
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
     toast.success('Código copiado!')
+  }
+
+  const closeConnectionScreen = () => {
+    setShowConnectionScreen(false)
+    setConnectionMethod(null)
+    setProgress(0)
+    setLogs([])
+    setConnectionError('')
+  }
+
+  // Connection Screen Overlay
+  if (showConnectionScreen) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm">
+        <div className="w-full max-w-lg mx-4 glass-card rounded-3xl p-8 relative">
+          {/* Close button */}
+          {!connectionError && (
+            <button
+              onClick={closeConnectionScreen}
+              className="absolute top-4 right-4 p-2 rounded-xl hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-smooth"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
+
+          {/* Title */}
+          <div className="text-center mb-8">
+            <div className={`w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center ${
+              connectionError ? 'bg-red-500/20' : 'bg-primary/20'
+            }`}>
+              {connectionError ? (
+                <AlertTriangle className="w-8 h-8 text-red-500" />
+              ) : progress >= 100 ? (
+                <Check className="w-8 h-8 text-green-500" />
+              ) : (
+                <RefreshCw className={`w-8 h-8 text-primary ${progress > 0 ? 'animate-spin' : ''}`} />
+              )}
+            </div>
+            <h2 className="text-2xl font-black">
+              {connectionError
+                ? 'Erro na Conexão'
+                : progress >= 100
+                  ? 'Conectado!'
+                  : 'Conectando ao WhatsApp'}
+            </h2>
+            <p className="text-sm text-muted-foreground mt-2">
+              {connectionError
+                ? 'Tente novamente ou envie o erro para suporte.'
+                : connectionMethod === 'qr'
+                  ? 'Abra o WhatsApp e escaneie o QR Code'
+                  : connectionMethod === 'pairing'
+                    ? 'Insira o código no seu celular'
+                    : 'Iniciando conexão...'}
+            </p>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="mb-8">
+            <div className="flex justify-between text-xs font-bold text-muted-foreground mb-2">
+              <span>{progress >= 100 ? 'Concluído' : `${progress}%`}</span>
+              <span>{connectionMethod === 'qr' ? 'QR Code' : connectionMethod === 'pairing' ? 'Pairing Code' : ''}</span>
+            </div>
+            <div className="h-3 bg-muted rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ease-out ${
+                  connectionError ? 'bg-red-500' : progress >= 100 ? 'bg-green-500' : 'bg-primary'
+                }`}
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+
+          {/* QR Code or Pairing Code Display */}
+          {connectionMethod === 'qr' && instance?.qrCode && !connectionError && (
+            <div className="bg-white p-4 rounded-2xl mx-auto w-fit mb-6 shadow-lg">
+              <img src={instance.qrCode} alt="QR Code" className="w-48 h-48" />
+            </div>
+          )}
+
+          {connectionMethod === 'pairing' && pairingCode && !connectionError && (
+            <div className="text-center mb-6">
+              <div className="text-4xl font-mono font-black text-primary tracking-[0.2em] bg-primary/10 py-6 rounded-2xl border-2 border-primary/20 inline-block cursor-pointer" onClick={() => copyToClipboard(pairingCode)}>
+                {pairingCode}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">Toque para copiar</p>
+            </div>
+          )}
+
+          {/* Error Display */}
+          {connectionError && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-6 mb-6 text-center">
+              <AlertTriangle className="w-10 h-10 text-red-500 mx-auto mb-3" />
+              <p className="text-red-400 font-bold">{connectionError}</p>
+              <button
+                onClick={() => {
+                  setShowConnectionScreen(false)
+                  setConnectionMethod(null)
+                  setProgress(0)
+                  setLogs([])
+                  setConnectionError('')
+                }}
+                className="mt-4 px-6 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-smooth btn-touch"
+              >
+                Tentar Novamente
+              </button>
+            </div>
+          )}
+
+          {/* Live Logs */}
+          <div className="bg-muted/50 rounded-2xl p-4 max-h-48 overflow-y-auto">
+            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3">Logs de Conexão</p>
+            {logs.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-4">Aguardando início...</p>
+            ) : (
+              <div className="space-y-2">
+                {logs.map((log, i) => (
+                  <div key={i} className="flex items-start gap-2 text-xs">
+                    <span className="text-muted-foreground font-mono shrink-0">{log.time}</span>
+                    <span className={`font-medium ${
+                      log.status === 'success' ? 'text-green-400' :
+                      log.status === 'error' ? 'text-red-400' :
+                      log.status === 'warning' ? 'text-yellow-400' : 'text-foreground'
+                    }`}>
+                      {log.message}
+                    </span>
+                  </div>
+                ))}
+                <div ref={logsEndRef} />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (isLoading) {
@@ -269,7 +485,7 @@ export default function Dashboard() {
                         ) : (
                           <div className="w-56 h-56 flex flex-col items-center justify-center text-muted-foreground gap-4">
                             <RefreshCw className="w-10 h-10 animate-spin text-primary/30" />
-                            <p className="text-xs font-bold uppercase tracking-tighter">Gerando código real...</p>
+                            <p className="text-xs font-bold uppercase tracking-tighter">Gerando código...</p>
                           </div>
                         )}
                       </div>
