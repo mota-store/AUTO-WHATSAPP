@@ -159,7 +159,8 @@ app.post('/api/flows', authMiddleware, async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Nome e flowData são obrigatórios' })
     }
 
-    await db.createMenuFlow(user.userId, name, description, flowData)
+    // Garantir que flowData seja tratado como string se a coluna for text
+    await db.createMenuFlow(user.userId, name, description, typeof flowData === 'string' ? JSON.parse(flowData) : flowData)
 
     res.json({ message: 'Fluxo criado com sucesso' })
     } catch (error: any) {
@@ -193,7 +194,7 @@ app.put('/api/flows/:flowId', authMiddleware, async (req: Request, res: Response
     await db.updateMenuFlow(parseInt(flowId), {
       name,
       description,
-      flowData,
+      flowData: typeof flowData === 'string' ? JSON.parse(flowData) : flowData,
     })
 
     res.json({ message: 'Fluxo atualizado com sucesso' })

@@ -34,7 +34,7 @@ export const menuFlows = mysqlTable("menu_flows", {
   userId: int("user_id").notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
-  flowData: json("flow_data").$type<MenuFlowData>().notNull(),
+  flowData: text("flow_data").$type<MenuFlowData>().notNull(),
   isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
