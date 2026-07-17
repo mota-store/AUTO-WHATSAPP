@@ -6,8 +6,19 @@ import * as db from './src/server/db'
 import { AuthPayload, CreateFlowRequest, UpdateFlowRequest } from './src/server/types'
 import { exec } from 'child_process'
 import { promisify } from 'util'
+import makeWASocket, { 
+  DisconnectReason, 
+  useMultiFileAuthState, 
+  fetchLatestBaileysVersion,
+  makeCacheableSignalKeyStore,
+  WAMessageKey,
+  Contact
+} from '@whiskeysockets/baileys'
+import pino from 'pino'
+import { Boom } from '@hapi/boom'
 
 const execAsync = promisify(exec)
+const sessions = new Map<number, any>()
 const app = express()
 const PORT = process.env.PORT || 3000
 
@@ -192,19 +203,68 @@ app.delete('/api/flows/:flowId', authMiddleware, async (req: Request, res: Respo
 app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Response) => {
   try {
     const user = (req as any).user as AuthPayload
-    let instance = await db.getWhatsappInstance(user.userId)
+    const { phoneNumber, usePairingCode } = req.body
     
+    let instance = await db.getWhatsappInstance(user.userId)
     if (!instance) {
       await db.createWhatsappInstance(user.userId)
       instance = await db.getWhatsappInstance(user.userId)
     }
 
-    // Aqui você integraria com o Baileys para gerar o QR Code
-    // Por enquanto, simulamos o início da conexão
-    await db.updateWhatsappInstance(instance!.id, {
-      status: 'connecting',
-      qrCode: 'https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=MotaFlow_Simulated_QR',
+    const sessionId = user.userId
+    const { state, saveCreds } = await useMultiFileAuthState(`sessions/session-${sessionId}`)
+    const { version } = await fetchLatestBaileysVersion()
+
+    const sock = makeWASocket({
+      version,
+      printQRInTerminal: false,
+      auth: {
+        creds: state.creds,
+        keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
+      },
+      logger: pino({ level: 'silent' }),
     })
+
+    sessions.set(sessionId, sock)
+
+    sock.ev.on('creds.update', saveCreds)
+
+    sock.ev.on('connection.update', async (update) => {
+      const { connection, lastDisconnect, qr } = update
+      
+      if (qr) {
+        await db.updateWhatsappInstance(instance!.id, {
+          status: 'connecting',
+          qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qr)}`,
+        })
+      }
+
+      if (connection === 'close') {
+        const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut
+        if (shouldReconnect) {
+          // Lógica de reconexão simplificada
+        }
+        await db.updateWhatsappInstance(instance!.id, { status: 'disconnected', qrCode: null })
+      } else if (connection === 'open') {
+        await db.updateWhatsappInstance(instance!.id, { 
+          status: 'connected', 
+          qrCode: null,
+          phoneNumber: sock.user?.id.split(':')[0]
+        })
+      }
+    })
+
+    if (usePairingCode && phoneNumber) {
+      setTimeout(async () => {
+        try {
+          const code = await sock.requestPairingCode(phoneNumber.replace(/\D/g, ''))
+          res.json({ pairingCode: code })
+        } catch (err) {
+          res.status(500).json({ message: 'Erro ao gerar código de pareamento' })
+        }
+      }, 3000)
+      return
+    }
 
     res.json({ message: 'Conexão iniciada' })
   } catch (error) {
