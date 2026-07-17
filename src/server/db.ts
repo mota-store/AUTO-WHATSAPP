@@ -12,23 +12,26 @@ export async function getDb() {
     // Extrair informações da URL para garantir que o banco de dados seja selecionado
     // mysql://user:pass@host:port/db_name
     const urlPattern = /^mysql:\/\/(.+):(.+)@(.+):(\d+)\/(.+)$/
-    const match = databaseUrl.split('?')[0].match(urlPattern)
+    const urlWithoutQuery = databaseUrl.split('?')[0]
+    const match = urlWithoutQuery.match(urlPattern)
     
-    let connectionConfig: any = {
-      uri: databaseUrl,
-      ssl: {
-        rejectUnauthorized: true
-      }
-    }
+    let connectionConfig: any
 
     if (match) {
-      const [, , , host, port, database] = match
+      const [, user, password, host, port, database] = match
       connectionConfig = {
         host,
         port: parseInt(port),
-        user: match[1],
-        password: match[2],
-        database: database,
+        user,
+        password,
+        database,
+        ssl: {
+          rejectUnauthorized: true
+        }
+      }
+    } else {
+      connectionConfig = {
+        uri: databaseUrl,
         ssl: {
           rejectUnauthorized: true
         }

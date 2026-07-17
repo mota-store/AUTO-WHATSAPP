@@ -6,7 +6,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "NODE_ENV=development node --watch server.js",
-    "build": "npm install && npx vite build && npx esbuild server.ts --platform=node --bundle --format=esm --outdir=dist --loader:.ts=ts --packages=external",
+    "build": "npx vite build && npx esbuild server.ts --platform=node --bundle --format=esm --outdir=dist --loader:.ts=ts --packages=external",
     "start": "NODE_ENV=production node dist/server.js",
     "db:push": "drizzle-kit push",
     "test": "vitest run"
@@ -20,7 +20,7 @@
   "author": "",
   "license": "MIT",
   "engines": {
-    "node": ">=18.0.0"
+    "node": "22"
   },
   "dependencies": {
 

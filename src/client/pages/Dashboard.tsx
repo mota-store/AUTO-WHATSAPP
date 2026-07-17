@@ -144,9 +144,11 @@ export default function Dashboard() {
     setPairingCode('')
     setConnectionActive(true)
     setConnectionMethod(usePairingCode ? 'pairing' : 'qr')
+    setShowConnectionScreen(true) // Abrir tela IMEDIATAMENTE ao clicar
     setProgress(10)
     setConnectionError('')
     setLogs([])
+    addLog('Iniciando conexão segura...', 'info')
     addLog(usePairingCode ? 'Solicitando código de pareamento...' : 'Gerando QR Code...', 'info')
 
     try {
@@ -167,15 +169,17 @@ export default function Dashboard() {
           addLog(`Código gerado: ${data.pairingCode}`, 'info')
           setProgress(40)
         } else {
-          addLog('QR Code gerado. Escaneie agora!', 'info')
-          setProgress(40)
+          addLog('Aguardando geração do QR Code...', 'info')
+          setProgress(25)
         }
       } else {
-        toast.error(data.message || 'Erro ao conectar')
+        setConnectionError(data.message || 'Erro ao conectar')
+        addLog(`Erro: ${data.message || 'Falha na API'}`, 'error')
         setConnectionActive(false)
       }
     } catch (error) {
-      toast.error('Erro ao conectar ao servidor')
+      setConnectionError('Erro de rede ao conectar ao servidor')
+      addLog('Erro: Falha na comunicação com o servidor', 'error')
       setConnectionActive(false)
     } finally {
       setIsConnecting(false)

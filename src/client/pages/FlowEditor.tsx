@@ -213,6 +213,7 @@ export default function FlowEditor() {
           number: 0,
           text: 'Voltar ao menu anterior',
           nextMenuId: selectedMenuId,
+          response: '',
         },
       ],
     }
@@ -225,7 +226,7 @@ export default function FlowEditor() {
         [selectedMenuId]: {
           ...selectedMenu,
           options: selectedMenu.options.map(opt =>
-            opt.id === optionId ? { ...opt, nextMenuId: newMenuId, response: undefined } : opt
+            opt.id === optionId ? { ...opt, nextMenuId: newMenuId, response: '' } : opt
           ),
         },
       },

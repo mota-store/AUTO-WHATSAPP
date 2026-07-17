@@ -80,8 +80,8 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
         name: newUser.name
       }
     })
-  } catch (error) {
-    console.error(error)
+    } catch (error) {
+    console.error('[REGISTER ERROR]', error instanceof Error ? error.stack : error)
     res.status(500).json({ message: 'Erro ao criar usuário' })
   }
 })
@@ -114,8 +114,8 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
         name: user.name,
       },
     })
-  } catch (error) {
-    console.error(error)
+    } catch (error) {
+    console.error('[LOGIN ERROR]', error instanceof Error ? error.stack : error)
     res.status(500).json({ message: 'Erro ao fazer login' })
   }
 })
@@ -131,8 +131,8 @@ app.get('/api/dashboard', authMiddleware, async (req: Request, res: Response) =>
       instance,
       flows,
     })
-  } catch (error) {
-    console.error(error)
+    } catch (error) {
+    console.error('[DASHBOARD ERROR]', error instanceof Error ? error.stack : error)
     res.status(500).json({ message: 'Erro ao carregar dashboard' })
   }
 })
@@ -150,8 +150,8 @@ app.post('/api/flows', authMiddleware, async (req: Request, res: Response) => {
     await db.createMenuFlow(user.userId, name, description, flowData)
 
     res.json({ message: 'Fluxo criado com sucesso' })
-  } catch (error) {
-    console.error(error)
+    } catch (error) {
+    console.error('[CREATE FLOW ERROR]', error instanceof Error ? error.stack : error)
     res.status(500).json({ message: 'Erro ao criar fluxo' })
   }
 })
@@ -269,11 +269,7 @@ async function processMessage(sock: any, msg: any, userId: number, instanceId: n
   }
 
   // Opção válida encontrada
-  if (matchedOption.response) {
-    // Enviar resposta personalizada e resetar estado
-    await sock.sendMessage(sender, { text: matchedOption.response })
-    messageStates.delete(chatId)
-  } else if (matchedOption.nextMenuId) {
+  if (matchedOption.nextMenuId) {
     // Navegar para próximo menu
     const nextMenu = flowData.menus[matchedOption.nextMenuId]
     if (nextMenu) {
@@ -284,6 +280,10 @@ async function processMessage(sock: any, msg: any, userId: number, instanceId: n
     } else {
       await sock.sendMessage(sender, { text: `⚠️ Erro: submenu não encontrado. Tente novamente.\n\n${buildMenuMessage(currentMenu)}` })
     }
+  } else if (matchedOption.response) {
+    // Enviar resposta personalizada e resetar estado
+    await sock.sendMessage(sender, { text: matchedOption.response })
+    messageStates.delete(chatId)
   } else {
     // Sem resposta e sem próximo menu - finalizar
     await sock.sendMessage(sender, { text: 'Obrigado por entrar em contato!' })
@@ -336,7 +336,7 @@ async function createQRSession(userId: number, instanceId: number) {
     logger: pino({ level: 'silent' }),
     browser: ['Ubuntu', 'Chrome', '110.0.5481.178'],
     syncFullHistory: false,
-    connectTimeoutMs: 30000,
+    connectTimeoutMs: 60000,
     keepAliveIntervalMs: 10000,
     maxMsgRetryCount: 5,
     retryRequestDelayMs: 3000,
@@ -413,7 +413,7 @@ async function createPairingSession(userId: number, phoneNumber: string, instanc
     auth: state,
     logger: pino({ level: 'silent' }),
     browser: Browsers.ubuntu('Chrome'),
-    connectTimeoutMs: 30000,
+    connectTimeoutMs: 60000,
     keepAliveIntervalMs: 10000,
     maxMsgRetryCount: 5,
     retryRequestDelayMs: 3000,
