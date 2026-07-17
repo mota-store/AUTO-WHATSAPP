@@ -1,4 +1,3 @@
-import 'dotenv/config'
 import { drizzle } from 'drizzle-orm/mysql2'
 import mysql from 'mysql2/promise'
 import * as schema from '../../drizzle/schema'
@@ -8,10 +7,8 @@ let db: ReturnType<typeof drizzle> | null = null
 
 export async function getDb() {
   if (!db) {
-    console.log('🔍 [DB DEBUG] Chaves disponíveis:', Object.keys(process.env).filter(k => k.includes("DATABASE")));
-    // Tentar ler de várias formas para garantir captura
-    const databaseUrl = process.env.DATABASE_URL || process.env['DATABASE_URL '] || process.env.DATABASEURL;
-    console.log('🔍 [DB DEBUG] DATABASE_URL encontrada:', !!databaseUrl);
+    const databaseUrl = process.env.DATABASE_URL;
+    console.log('🔌 [DB] Tentando conectar via process.env.DATABASE_URL...');
     
     if (!databaseUrl) {
       console.error('❌ [DB] DATABASE_URL não definida nas variáveis de ambiente');

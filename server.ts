@@ -1,4 +1,3 @@
-import 'dotenv/config'
 import express, { Request, Response, NextFunction } from 'express'
 import cors from 'cors'
 import { createToken, verifyPassword, hashPassword, verifyToken, extractToken } from './src/server/utils'
@@ -27,16 +26,10 @@ const messageStates = new Map<string, { flowId: number, menuId: string, userId: 
 const app = express()
 const PORT = process.env.PORT || 3000
 
-console.log('🚀 [SYSTEM] Iniciando MOTA-FLOW...');
-console.log('🚀 [SYSTEM] DATABASE_URL configurada:', !!process.env.DATABASE_URL);
-if (!process.env.DATABASE_URL) {
-  console.log('⚠️ [SYSTEM] Tentando ler DATABASE_URL via Object.entries...');
-  const found = Object.entries(process.env).find(([k]) => k.trim() === 'DATABASE_URL');
-  if (found) {
-    console.log('✅ [SYSTEM] DATABASE_URL encontrada com trim!');
-    process.env.DATABASE_URL = found[1];
-  }
-}
+console.log('🚀 [MOTA-FLOW] Iniciando servidor...');
+console.log('📊 [ENV] DATABASE_URL detectada:', !!process.env.DATABASE_URL);
+console.log('📊 [ENV] JWT_SECRET detectado:', !!process.env.JWT_SECRET);
+console.log('📊 [ENV] NODE_ENV:', process.env.NODE_ENV);
 
 // Middleware
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }))
