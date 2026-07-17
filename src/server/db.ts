@@ -7,24 +7,35 @@ let db: ReturnType<typeof drizzle> | null = null
 
 export async function getDb() {
   if (!db) {
-    const databaseUrl = process.env.DATABASE_URL || ''
+    const databaseUrl = process.env.DATABASE_URL
     
-    // Extrair informações da URL para garantir que o banco de dados seja selecionado
-    // mysql://user:pass@host:port/db_name
+    if (!databaseUrl) {
+      console.error('❌ [DB] DATABASE_URL não definida nas variáveis de ambiente');
+      throw new Error('Configuração de banco de dados ausente (DATABASE_URL)');
+    }
+
+    console.log('🔌 [DB] Conectando ao banco de dados remoto...');
+    
+    // Configuração robusta para o driver mysql2
     const connectionConfig: any = {
       uri: databaseUrl,
       ssl: {
         rejectUnauthorized: true
-      }
+      },
+      // Forçar o uso da URI para evitar fallbacks de localhost no driver
+      connectTimeout: 10000,
     }
 
-    // Se a URL contém parâmetros de query, o mysql2/promise prefere que passemos a URI direta
-    // Mas para o TiDB Cloud, às vezes é necessário garantir o SSL explicitamente no config
-    console.log('🔌 [DB] Conectando ao TiDB Cloud...');
-    const connection = await mysql.createConnection(connectionConfig)
-    console.log('✅ [DB] Conexão MySQL estabelecida');
-    db = drizzle(connection, { schema, mode: 'default' })
-    console.log('✅ [DB] Drizzle ORM inicializado');
+    try {
+      const connection = await mysql.createConnection(connectionConfig)
+      console.log('✅ [DB] Conexão MySQL estabelecida com sucesso');
+      db = drizzle(connection, { schema, mode: 'default' })
+      console.log('✅ [DB] Drizzle ORM inicializado');
+    } catch (error: any) {
+      console.error('❌ [DB] Falha crítica na conexão com o banco:', error.message);
+      console.error('Stack:', error.stack);
+      throw error;
+    }
   }
   return db
 }

@@ -5,7 +5,7 @@ export default defineConfig({
   out: "./drizzle/migrations",
   dialect: "mysql",
   dbCredentials: {
-    url: process.env.DATABASE_URL || "mysql://root:password@localhost:3306/auto_whatsapp",
+    url: process.env.DATABASE_URL as string,
     ssl: {
       rejectUnauthorized: true
     }
