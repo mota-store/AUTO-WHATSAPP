@@ -4,6 +4,7 @@ import cors from 'cors'
 import { createToken, verifyPassword, hashPassword, verifyToken, extractToken } from './src/server/utils'
 import * as db from './src/server/db'
 import { AuthPayload, CreateFlowRequest, UpdateFlowRequest } from './src/server/types'
+import { MenuFlowData, MenuNode, MenuOption } from './drizzle/schema'
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import fs from 'fs'
@@ -12,7 +13,8 @@ import makeWASocket, {
   useMultiFileAuthState, 
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
-  Browsers
+  Browsers,
+  WAMessage
 } from '@whiskeysockets/baileys'
 import pino from 'pino'
 import { Boom } from '@hapi/boom'
@@ -20,6 +22,7 @@ import { Boom } from '@hapi/boom'
 const execAsync = promisify(exec)
 const sessions = new Map<number, any>()
 const pairingCodeRequests = new Map<number, { number: string, attempts: number, timer: any }>()
+const messageStates = new Map<string, { flowId: number, menuId: string, userId: number, instanceId: number }>()
 const app = express()
 const PORT = process.env.PORT || 3000
 
@@ -199,6 +202,100 @@ app.delete('/api/flows/:flowId', authMiddleware, async (req: Request, res: Respo
   }
 })
 
+// Processar mensagens recebidas do WhatsApp
+async function processMessage(sock: any, msg: any, userId: number, instanceId: number, flowData: MenuFlowData) {
+  const sender = msg.key?.remoteJid
+  const messageText = msg.message?.conversation || msg.message?.extendedTextMessage?.text || ''
+  const chatId = sender
+
+  if (!sender || !messageText) return
+
+  console.log(`💬 [MOTA-FLOW] Mensagem de ${sender}: ${messageText}`)
+
+  // Determinar o estado atual do chat
+  let state = messageStates.get(chatId)
+
+  // Se não houver estado, verificar se o usuário está iniciando o fluxo
+  if (!state) {
+    // Buscar o menu raiz
+    const rootMenu = flowData.menus[flowData.rootMenuId]
+    if (!rootMenu) return
+
+    // Enviar a mensagem inicial do fluxo
+    const menuMessage = buildMenuMessage(rootMenu)
+    await sock.sendMessage(sender, { text: menuMessage })
+
+    // Salvar estado inicial
+    state = { flowId: 0, menuId: flowData.rootMenuId, userId, instanceId }
+    messageStates.set(chatId, state)
+
+    // Log da interação
+    await db.logMessage(userId, instanceId, sender, messageText, menuMessage, 0)
+    return
+  }
+
+  // Processar a resposta do usuário
+  const currentMenu = flowData.menus[state.menuId]
+  if (!currentMenu) {
+    messageStates.delete(chatId)
+    return
+  }
+
+  const input = messageText.trim().toLowerCase()
+
+  // Buscar opção correspondente ao input
+  const matchedOption = currentMenu.options.find((opt: MenuOption) => {
+    const optNum = String(opt.number).trim()
+    const optText = opt.text?.toLowerCase().trim() || ''
+    return input === optNum || optText === input || (optText && input.startsWith(optText))
+  })
+
+  if (!matchedOption) {
+    // Opção inválida - reenviar o menu
+    const errorMsg = `⚠️ Opção inválida. Por favor, digite o número ou o nome da opção:\n\n${buildMenuMessage(currentMenu)}`
+    await sock.sendMessage(sender, { text: errorMsg })
+    return
+  }
+
+  // Opção válida encontrada
+  if (matchedOption.response) {
+    // Enviar resposta personalizada e resetar estado
+    await sock.sendMessage(sender, { text: matchedOption.response })
+    messageStates.delete(chatId)
+  } else if (matchedOption.nextMenuId) {
+    // Navegar para próximo menu
+    const nextMenu = flowData.menus[matchedOption.nextMenuId]
+    if (nextMenu) {
+      const nextMessage = buildMenuMessage(nextMenu)
+      await sock.sendMessage(sender, { text: nextMessage })
+      state.menuId = matchedOption.nextMenuId
+      messageStates.set(chatId, state)
+    } else {
+      await sock.sendMessage(sender, { text: `⚠️ Erro: submenu não encontrado. Tente novamente.\n\n${buildMenuMessage(currentMenu)}` })
+    }
+  } else {
+    // Sem resposta e sem próximo menu - finalizar
+    await sock.sendMessage(sender, { text: 'Obrigado por entrar em contato!' })
+    messageStates.delete(chatId)
+  }
+
+  // Log da interação
+  await db.logMessage(userId, instanceId, sender, messageText, matchedOption.response || currentMenu.options.find((o: MenuOption) => o.id === matchedOption.id)?.text || '', 0)
+}
+
+// Construir mensagem de menu formatada
+function buildMenuMessage(menu: MenuNode): string {
+  let message = `📌 *${menu.title}*\n\n${menu.message || 'Escolha uma opção:'}\n\n`
+  
+  menu.options.forEach((opt: MenuOption) => {
+    if (opt.nextMenuId || opt.response) {
+      message += `*${opt.number} - ${opt.text}*\n`
+    }
+  })
+
+  return message.trim()
+}
+
 // Helper para reconexão automática em caso de falha temporária
 async function createWhatsAppSession(userId: number, phoneNumber: string, instanceId: number) {
   const sessionPath = `sessions/session-${userId}`
@@ -230,6 +327,27 @@ async function createWhatsAppSession(userId: number, phoneNumber: string, instan
   sessions.set(userId, sock)
 
   sock.ev.on('creds.update', saveCreds)
+
+  // PROCESSAMENTO DE MENSAGENS REAIS
+  sock.ev.on('messages.upsert', async (m: any) => {
+    try {
+      const msg = m.messages[0]
+      if (!msg || msg.key.fromMe) return
+
+      // Buscar fluxos ativos do usuário
+      const flows = await db.getUserMenuFlows(userId)
+      const activeFlow = flows.find((f: any) => f.isActive)
+      if (!activeFlow) return
+
+      const flowData: MenuFlowData = activeFlow.flowData
+      if (!flowData || !flowData.menus || !flowData.rootMenuId) return
+
+      console.log(`📨 [MOTA-FLOW] Processando mensagem para flow: ${activeFlow.name}`)
+      await processMessage(sock, msg, userId, instanceId, flowData)
+    } catch (err) {
+      console.error('Erro ao processar mensagem:', err)
+    }
+  })
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update
@@ -335,6 +453,9 @@ app.post('/api/whatsapp/:instanceId/disconnect', authMiddleware, async (req: Req
       clearTimeout(req.timer)
       pairingCodeRequests.delete(user.userId)
     }
+
+    // Limpar estados de mensagens ao desconectar
+    messageStates.clear()
 
     const sessionPath = `sessions/session-${user.userId}`
     if (fs.existsSync(sessionPath)) {
