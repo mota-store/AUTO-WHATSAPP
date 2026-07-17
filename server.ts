@@ -222,7 +222,11 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
         creds: state.creds,
         keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
       },
-      logger: pino({ level: 'silent' }),
+      logger: pino({ level: 'info' }), // Ativar logs para depuração no Render
+      browser: ['MotaFlow', 'Chrome', '1.0.0'],
+      connectTimeoutMs: 60000,
+      defaultQueryTimeoutMs: 0,
+      keepAliveIntervalMs: 10000,
     })
 
     sessions.set(sessionId, sock)
