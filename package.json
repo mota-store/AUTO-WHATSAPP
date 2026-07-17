@@ -6,7 +6,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "NODE_ENV=development node --watch server.js",
-    "build": "npx vite build && npx esbuild server.ts --platform=node --bundle --format=esm --outdir=dist --loader:.ts=ts --packages=external",
+    "build": "npx vite build && npx esbuild server.ts --platform=node --bundle --format=esm --outdir=dist --loader:.ts=ts --packages=external --define:process.env.NODE_ENV='\"production\"'",
     "start": "NODE_ENV=production node dist/server.js",
     "db:push": "drizzle-kit push",
     "test": "vitest run"
