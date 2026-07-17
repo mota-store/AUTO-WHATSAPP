@@ -7,7 +7,12 @@ let db: ReturnType<typeof drizzle> | null = null
 
 export async function getDb() {
   if (!db) {
-    const connection = await mysql.createConnection(process.env.DATABASE_URL || '')
+    const connection = await mysql.createConnection({
+      uri: process.env.DATABASE_URL || '',
+      ssl: {
+        rejectUnauthorized: true,
+      },
+    })
     db = drizzle(connection, { schema })
   }
   return db
