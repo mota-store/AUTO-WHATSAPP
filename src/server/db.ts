@@ -20,8 +20,11 @@ export async function getDb() {
 
     // Se a URL contém parâmetros de query, o mysql2/promise prefere que passemos a URI direta
     // Mas para o TiDB Cloud, às vezes é necessário garantir o SSL explicitamente no config
+    console.log('🔌 [DB] Conectando ao TiDB Cloud...');
     const connection = await mysql.createConnection(connectionConfig)
+    console.log('✅ [DB] Conexão MySQL estabelecida');
     db = drizzle(connection, { schema, mode: 'default' })
+    console.log('✅ [DB] Drizzle ORM inicializado');
   }
   return db
 }
