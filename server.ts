@@ -211,7 +211,11 @@ app.listen(PORT, async () => {
   if (process.env.NODE_ENV === 'production') {
     try {
       console.log('🔄 Sincronizando banco de dados...')
-      const { stdout, stderr } = await execAsync('npx drizzle-kit push')
+      const databaseUrl = process.env.DATABASE_URL || ''
+      const sslUrl = databaseUrl.includes('?') 
+        ? `${databaseUrl}&ssl={"rejectUnauthorized":true}`
+        : `${databaseUrl}?ssl={"rejectUnauthorized":true}`
+      const { stdout, stderr } = await execAsync(`DATABASE_URL='${sslUrl}' npx drizzle-kit push`)
       console.log('✅ Banco de dados sincronizado:', stdout)
       if (stderr) console.error('⚠️ Aviso na sincronização:', stderr)
     } catch (error) {
