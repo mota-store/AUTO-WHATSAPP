@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ArrowLeft, Plus, Trash2, Save, ChevronRight, Reply, List, MessageSquare, Smartphone, Send } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Save, ChevronRight, Reply, List, Smartphone, Send, RefreshCw } from 'lucide-react'
 
 interface MenuOption {
   id: string
@@ -34,11 +34,12 @@ export default function FlowEditor() {
       menu_1: {
         id: 'menu_1',
         title: 'Menu Principal',
-        message: '👋 Olá! Bem-vindo ao nosso atendimento. Escolha uma opção abaixo:',
+        message: '👋 Olá! Seja muito bem-vindo(a). Como podemos ajudar hoje?',
         options: [
-          { id: 'opt_1', number: 1, text: 'Falar com Vendas', response: 'Em breve um consultor entrará em contato com você.' },
-          { id: 'opt_2', number: 2, text: 'Suporte Técnico', response: 'Descreva o problema que você está enfrentando.' },
-          { id: 'opt_3', number: 3, text: 'Falar com Atendente', response: 'Transferindo para um atendente humano...' },
+          { id: 'opt_1', number: 1, text: 'Produtos', response: '' },
+          { id: 'opt_2', number: 2, text: 'Promoções', response: '' },
+          { id: 'opt_3', number: 3, text: 'Dúvidas Frequentes (FAQ)', response: '' },
+          { id: 'opt_4', number: 4, text: 'Falar com um Atendente', response: 'Perfeito! Descreva sua dúvida com o máximo de detalhes possível.\n\nNossa equipe responderá assim que um atendente estiver disponível.\n\n⏰ Horário: Seg-Sex, 08h às 18h\n\n🙏 Obrigado por escolher a Mota Store!' },
         ],
       },
     },
@@ -49,11 +50,22 @@ export default function FlowEditor() {
   const [isLoading, setIsLoading] = useState(!!flowId)
   const [previewMode, setPreviewMode] = useState<'editor' | 'preview'>('editor')
 
+  // Estado da simulação de conversa no preview
+  const [chatMessages, setChatMessages] = useState<Array<{ type: 'bot' | 'client', text: string }>>([])
+  const [currentMenuId, setCurrentMenuId] = useState<string>('')
+
   useEffect(() => {
     if (flowId) {
       loadFlow()
     }
   }, [flowId])
+
+  // Iniciar preview do menu raiz
+  useEffect(() => {
+    if (previewMode === 'preview' && flowData.rootMenuId) {
+      resetChat()
+    }
+  }, [previewMode, flowData.rootMenuId])
 
   const loadFlow = async () => {
     try {
@@ -84,6 +96,55 @@ export default function FlowEditor() {
   }
 
   const selectedMenu = flowData.menus[selectedMenuId]
+
+  // Resetar chat para o menu raiz
+  const resetChat = () => {
+    const rootMenu = flowData.menus[flowData.rootMenuId]
+    if (!rootMenu) return
+
+    const optionsText = rootMenu.options
+      .map(opt => `${opt.number}. ${opt.text}`)
+      .join('\n')
+
+    setChatMessages([
+      { type: 'bot', text: `${rootMenu.message}\n\n${optionsText}` },
+    ])
+    setCurrentMenuId(flowData.rootMenuId)
+  }
+
+  // Simular cliente digitando uma opção
+  const handleClientChoice = (option: MenuOption) => {
+    if (option.nextMenuId) {
+      // Navegar para sub-menu
+      const nextMenu = flowData.menus[option.nextMenuId]
+      if (!nextMenu) return
+
+      const optionsText = nextMenu.options
+        .map(opt => `${opt.number}. ${opt.text}`)
+        .join('\n')
+
+      setChatMessages(prev => [
+        ...prev,
+        { type: 'client', text: String(option.number) },
+        { type: 'bot', text: `${nextMenu.message}\n\n${optionsText}` },
+      ])
+      setCurrentMenuId(option.nextMenuId)
+    } else if (option.response) {
+      // Resposta final
+      setChatMessages(prev => [
+        ...prev,
+        { type: 'client', text: String(option.number) },
+        { type: 'bot', text: option.response! },
+      ])
+    } else {
+      // Opção sem resposta e sem sub-menu
+      setChatMessages(prev => [
+        ...prev,
+        { type: 'client', text: String(option.number) },
+        { type: 'bot', text: 'Obrigado por entrar em contato!' },
+      ])
+    }
+  }
 
   const addOption = () => {
     if (!selectedMenu) return
@@ -350,48 +411,92 @@ export default function FlowEditor() {
 
           {/* Main Content */}
           <div className="lg:col-span-9">
-            {previewMode === 'preview' && selectedMenu ? (
-              /* Preview Mode - Simulação WhatsApp */
+            {previewMode === 'preview' ? (
+              /* Preview Mode - Simulação conversa WhatsApp REAL */
               <div className="glass-card rounded-2xl overflow-hidden animate-in fade-in duration-300">
-                {/* Phone Header */}
-                <div className="bg-primary px-4 py-3 flex items-center gap-3">
-                  <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-                    <MessageSquare className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-white font-bold text-sm">MOTA-FLOW Bot</p>
-                    <p className="text-white/60 text-[10px]">online</p>
-                  </div>
-                </div>
-                {/* Phone Body */}
-                <div className="bg-[#0B141A] p-4 min-h-[400px] space-y-3">
-                  {/* Bot Message */}
-                  <div className="flex justify-start">
-                    <div className="bg-[#202C33] rounded-2xl rounded-tl-none px-4 py-3 max-w-[80%] border border-[#2A3942]">
-                      <p className="text-white text-sm whitespace-pre-line">{selectedMenu.message}</p>
-                      <div className="flex justify-end mt-1">
-                        <span className="text-[10px] text-muted-foreground">09:00</span>
-                      </div>
+                {/* Header do "celular" */}
+                <div className="bg-[#075E54] px-4 py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => resetChat()}
+                      className="text-white/80 hover:text-white transition flex items-center gap-1 text-xs font-bold"
+                    >
+                      <ArrowLeft className="w-4 h-4" /> Voltar
+                    </button>
+                    <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                      <Send className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-white font-bold text-sm">{flowName || 'MOTA-FLOW'}</p>
+                      <p className="text-white/60 text-[10px]">online</p>
                     </div>
                   </div>
-                  {/* Options */}
-                  {selectedMenu.options.map((option) => (
-                    <div key={option.id} className="flex justify-start">
-                      <div className="bg-[#1F2C33] rounded-xl px-4 py-2 max-w-[80%] border border-[#2A3942]">
-                        <p className="text-primary font-bold text-sm">
-                          {option.number} - {option.text}
-                        </p>
-                        {option.response && (
-                          <p className="text-white/60 text-xs mt-1">Resposta: {option.response}</p>
-                        )}
-                        {option.nextMenuId && (
-                          <p className="text-primary/60 text-xs mt-1 flex items-center gap-1">
-                            <ChevronRight className="w-3 h-3" /> Sub-menu: {flowData.menus[option.nextMenuId]?.title}
+                  <button
+                    onClick={resetChat}
+                    className="text-white/60 hover:text-white transition p-1 btn-touch"
+                    title="Reiniciar"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Corpo da conversa - fundo WhatsApp */}
+                <div
+                  className="px-3 py-4 min-h-[450px] max-h-[600px] overflow-y-auto space-y-2 custom-scrollbar"
+                  style={{
+                    backgroundColor: '#0B141A',
+                    backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.03\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
+                  }}
+                >
+                  {chatMessages.map((msg, idx) => (
+                    <div key={idx} className={`flex ${msg.type === 'client' ? 'justify-end' : 'justify-start'}`}>
+                      {msg.type === 'bot' ? (
+                        <div
+                          className="rounded-lg px-3 py-2 max-w-[85%] text-sm"
+                          style={{ backgroundColor: '#202C33' }}
+                        >
+                          <p className="text-white/90 whitespace-pre-line leading-relaxed text-[13px]">
+                            {msg.text}
                           </p>
-                        )}
-                      </div>
+                        </div>
+                      ) : (
+                        <div
+                          className="rounded-lg px-3 py-2 max-w-[85%] text-sm"
+                          style={{ backgroundColor: '#005C4B' }}
+                        >
+                          <p className="text-white whitespace-pre-line text-[13px]">
+                            {msg.text}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   ))}
+                </div>
+
+                {/* Área de input - simular digitação */}
+                <div className="bg-[#202C33] px-3 py-3 border-t border-[#2A3942]">
+                  <p className="text-white/40 text-[10px] uppercase tracking-wider font-bold mb-2 text-center">
+                    Selecione uma opção (simulação)
+                  </p>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {currentMenuId && flowData.menus[currentMenuId]?.options?.map((option) => (
+                      <button
+                        key={option.id}
+                        onClick={() => handleClientChoice(option)}
+                        className="px-3 py-1.5 bg-[#2A3942] text-white/70 text-xs font-medium rounded-full hover:bg-[#005C4B] hover:text-white transition btn-touch min-h-[36px]"
+                      >
+                        {option.number}. {option.text}
+                      </button>
+                    ))}
+                    {currentMenuId && (
+                      <button
+                        onClick={resetChat}
+                        className="px-3 py-1.5 bg-primary/20 text-primary text-xs font-bold rounded-full hover:bg-primary hover:text-white transition btn-touch min-h-[36px]"
+                      >
+                        ↺ Reiniciar
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ) : selectedMenu ? (
