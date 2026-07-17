@@ -7,7 +7,6 @@ import { AuthPayload, CreateFlowRequest, UpdateFlowRequest } from './src/server/
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import fs from 'fs'
-import path from 'path'
 import makeWASocket, { 
   DisconnectReason, 
   useMultiFileAuthState, 
@@ -214,13 +213,11 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
     const sessionId = user.userId
     const sessionPath = `sessions/session-${sessionId}`
 
-    // Se estiver tentando reconectar e já houver uma sessão, limpar para evitar erros de pareamento
+    // Limpeza profunda para nova tentativa de pareamento
     if (usePairingCode && fs.existsSync(sessionPath)) {
       try {
         fs.rmSync(sessionPath, { recursive: true, force: true })
-      } catch (e) {
-        console.error('Erro ao limpar sessão antiga:', e)
-      }
+      } catch (e) {}
     }
 
     const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
@@ -234,11 +231,12 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
         keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
       },
       logger: pino({ level: 'silent' }),
-      // Usar identificação de navegador mais estável (Ubuntu/Chrome)
-      browser: Browsers.ubuntu('Chrome'),
+      // IDENTIDADE DE ALTA CONFIANÇA: macOS + Chrome
+      browser: Browsers.macOS('Chrome'),
+      syncFullHistory: false, // Desativar sincronização pesada inicial
       connectTimeoutMs: 60000,
       defaultQueryTimeoutMs: 0,
-      keepAliveIntervalMs: 30000, // Aumentar para manter a conexão mais estável
+      keepAliveIntervalMs: 30000,
       retryRequestDelayMs: 5000,
     })
 
@@ -260,15 +258,11 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
         const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut
         
-        console.log(`📡 Conexão fechada. Código: ${statusCode}. Reconectar? ${shouldReconnect}`)
+        console.log(`📡 [MOTA-FLOW] Conexão fechada. Status: ${statusCode}. Reconectar? ${shouldReconnect}`)
         
         await db.updateWhatsappInstance(instance!.id, { status: 'disconnected', qrCode: null })
-        
-        if (shouldReconnect) {
-          // Lógica de reconexão automática poderia ser implementada aqui
-        }
       } else if (connection === 'open') {
-        console.log('✅ WhatsApp conectado com sucesso!')
+        console.log('✅ [MOTA-FLOW] WhatsApp conectado com sucesso!')
         await db.updateWhatsappInstance(instance!.id, { 
           status: 'connected', 
           qrCode: null,
@@ -278,18 +272,17 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
     })
 
     if (usePairingCode && phoneNumber) {
-      // Aguardar inicialização completa do socket antes de pedir pairing code
       setTimeout(async () => {
         try {
           const cleanNumber = phoneNumber.replace(/\D/g, '')
-          console.log(`📲 Solicitando Pairing Code para: ${cleanNumber}`)
+          console.log(`📲 [MOTA-FLOW] Solicitando Pairing Code: ${cleanNumber}`)
           const code = await sock.requestPairingCode(cleanNumber)
           res.json({ pairingCode: code })
         } catch (err) {
-          console.error('Erro ao gerar pairing code:', err)
-          res.status(500).json({ message: 'Erro ao gerar código de pareamento. Tente novamente em instantes.' })
+          console.error('Erro no pareamento:', err)
+          res.status(500).json({ message: 'Erro ao gerar código. Tente novamente em 10 segundos.' })
         }
-      }, 5000) // Aumentar o delay para 5 segundos para garantir prontidão do socket
+      }, 5000)
       return
     }
 
@@ -305,14 +298,12 @@ app.post('/api/whatsapp/:instanceId/disconnect', authMiddleware, async (req: Req
     const { instanceId } = req.params
     const user = (req as any).user as AuthPayload
     
-    // Tentar fechar a sessão ativa
     const sock = sessions.get(user.userId)
     if (sock) {
       try { sock.logout() } catch (e) {}
       sessions.delete(user.userId)
     }
 
-    // Limpar arquivos de sessão ao desconectar manualmente
     const sessionPath = `sessions/session-${user.userId}`
     if (fs.existsSync(sessionPath)) {
       try {
@@ -348,7 +339,6 @@ app.get('*', (req: Request, res: Response) => {
 app.listen(PORT, async () => {
   console.log(`🚀 Servidor MOTA-FLOW rodando em http://localhost:${PORT}`)
   
-  // Tentar sincronizar o banco de dados automaticamente no boot
   if (process.env.NODE_ENV === 'production' || process.env.DATABASE_URL) {
     try {
       console.log('🔄 Sincronizando banco de dados...')
