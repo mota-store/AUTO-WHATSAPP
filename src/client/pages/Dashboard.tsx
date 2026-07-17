@@ -42,6 +42,7 @@ export default function Dashboard() {
   const [progress, setProgress] = useState(0)
   const [logs, setLogs] = useState<ConnectionLog[]>([])
   const [connectionError, setConnectionError] = useState('')
+  const [connectionActive, setConnectionActive] = useState(false)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const prevStatusRef = useRef<string>('')
 
@@ -51,39 +52,30 @@ export default function Dashboard() {
     return () => clearInterval(interval)
   }, [])
 
-  // Monitor status changes for connection screen
+  // Monitor status changes ONLY when connection is actively being attempted
   useEffect(() => {
-    if (!instance) return
+    if (!instance || !connectionActive) return
 
     const currentStatus = instance.status
     const prevStatus = prevStatusRef.current
 
-    // When status changes to "connecting", show connection screen
-    if (currentStatus === 'connecting' && prevStatus === 'disconnected') {
-      setShowConnectionScreen(true)
-      setConnectionError('')
-      setProgress(10)
-      const method = instance.qrCode ? 'qr' : 'pairing'
-      setConnectionMethod(method)
-      addLog(`Iniciando conexão via ${method === 'qr' ? 'QR Code' : 'Pairing Code'}...`, 'info')
+    // QR Code foi gerado — avançar progresso
+    if (connectionMethod === 'qr' && currentStatus === 'connecting' && instance.qrCode && progress < 40) {
+      setProgress(40)
+      addLog('QR Code gerado! Escaneie agora.', 'info')
     }
 
-    // Update progress based on status and presence of QR code
-    if (showConnectionScreen && currentStatus === 'connecting') {
-      if (instance.qrCode && progress < 40) {
-        setProgress(40)
-        addLog('QR Code gerado! Aguardando escaneamento...', 'info')
-      }
-      if (pairingCode && progress < 40) {
-        setProgress(40)
-        addLog(`Código de pareamento gerado: ${pairingCode}`, 'info')
-      }
+    // Pairing Code foi gerado — avançar progresso
+    if (connectionMethod === 'pairing' && pairingCode && progress < 40) {
+      setProgress(40)
+      addLog(`Código gerado: ${pairingCode}`, 'info')
     }
 
-    // When status changes to "connected", complete the screen
-    if (currentStatus === 'connected' && prevStatus !== 'connected') {
+    // Conectado com sucesso
+    if (currentStatus === 'connected') {
       setProgress(100)
       addLog('WhatsApp conectado com sucesso!', 'success')
+      setConnectionActive(false)
       setTimeout(() => {
         setShowConnectionScreen(false)
         setConnectionMethod(null)
@@ -93,15 +85,16 @@ export default function Dashboard() {
       }, 2000)
     }
 
-    // When status changes to "disconnected" during connection, show error
-    if (currentStatus === 'disconnected' && prevStatus === 'connecting' && showConnectionScreen) {
-      setConnectionError('A conexão foi interrompida. Verifique os logs do servidor.')
+    // Erro na conexão (disconnected durante tentativa ativa)
+    if (currentStatus === 'disconnected' && prevStatus === 'connecting' && connectionActive) {
+      setConnectionError('A conexão foi interrompida pelo servidor do WhatsApp.')
       addLog('Erro: Conexão interrompida', 'error')
+      setConnectionActive(false)
       setProgress(0)
     }
 
     prevStatusRef.current = currentStatus
-  }, [instance, pairingCode, showConnectionScreen])
+  }, [instance, pairingCode, connectionActive, connectionMethod, progress])
 
   // Auto-scroll logs
   useEffect(() => {
@@ -149,7 +142,13 @@ export default function Dashboard() {
 
     setIsConnecting(true)
     setPairingCode('')
-    prevStatusRef.current = 'disconnected' // Reset previous status
+    setConnectionActive(true)
+    setConnectionMethod(usePairingCode ? 'pairing' : 'qr')
+    setProgress(10)
+    setConnectionError('')
+    setLogs([])
+    addLog(usePairingCode ? 'Solicitando código de pareamento...' : 'Gerando QR Code...', 'info')
+
     try {
       const token = localStorage.getItem('token')
       const response = await fetch('/api/whatsapp/connect', {
@@ -165,13 +164,19 @@ export default function Dashboard() {
       if (response.ok) {
         if (data.pairingCode) {
           setPairingCode(data.pairingCode)
+          addLog(`Código gerado: ${data.pairingCode}`, 'info')
+          setProgress(40)
+        } else {
+          addLog('QR Code gerado. Escaneie agora!', 'info')
+          setProgress(40)
         }
-        loadData()
       } else {
         toast.error(data.message || 'Erro ao conectar')
+        setConnectionActive(false)
       }
     } catch (error) {
       toast.error('Erro ao conectar ao servidor')
+      setConnectionActive(false)
     } finally {
       setIsConnecting(false)
     }
@@ -190,6 +195,7 @@ export default function Dashboard() {
       if (response.ok) {
         toast.success('WhatsApp desconectado')
         setPairingCode('')
+        setConnectionActive(false)
         setShowConnectionScreen(false)
         setConnectionMethod(null)
         setProgress(0)
@@ -226,6 +232,7 @@ export default function Dashboard() {
   }
 
   const closeConnectionScreen = () => {
+    setConnectionActive(false)
     setShowConnectionScreen(false)
     setConnectionMethod(null)
     setProgress(0)
@@ -233,20 +240,18 @@ export default function Dashboard() {
     setConnectionError('')
   }
 
-  // Connection Screen Overlay
+  // Connection Screen Overlay — só aparece quando connectionActive é true
   if (showConnectionScreen) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm">
         <div className="w-full max-w-lg mx-4 glass-card rounded-3xl p-8 relative">
           {/* Close button */}
-          {!connectionError && (
-            <button
-              onClick={closeConnectionScreen}
-              className="absolute top-4 right-4 p-2 rounded-xl hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-smooth"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          )}
+          <button
+            onClick={closeConnectionScreen}
+            className="absolute top-4 right-4 p-2 rounded-xl hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-smooth"
+          >
+            <X className="w-5 h-5" />
+          </button>
 
           {/* Title */}
           <div className="text-center mb-8">
@@ -258,7 +263,7 @@ export default function Dashboard() {
               ) : progress >= 100 ? (
                 <Check className="w-8 h-8 text-green-500" />
               ) : (
-                <RefreshCw className={`w-8 h-8 text-primary ${progress > 0 ? 'animate-spin' : ''}`} />
+                <RefreshCw className="w-8 h-8 text-primary animate-spin" />
               )}
             </div>
             <h2 className="text-2xl font-black">
@@ -273,9 +278,7 @@ export default function Dashboard() {
                 ? 'Tente novamente ou envie o erro para suporte.'
                 : connectionMethod === 'qr'
                   ? 'Abra o WhatsApp e escaneie o QR Code'
-                  : connectionMethod === 'pairing'
-                    ? 'Insira o código no seu celular'
-                    : 'Iniciando conexão...'}
+                  : 'Insira o código no seu celular'}
             </p>
           </div>
 
@@ -283,7 +286,7 @@ export default function Dashboard() {
           <div className="mb-8">
             <div className="flex justify-between text-xs font-bold text-muted-foreground mb-2">
               <span>{progress >= 100 ? 'Concluído' : `${progress}%`}</span>
-              <span>{connectionMethod === 'qr' ? 'QR Code' : connectionMethod === 'pairing' ? 'Pairing Code' : ''}</span>
+              <span>{connectionMethod === 'qr' ? 'QR Code' : 'Pairing Code'}</span>
             </div>
             <div className="h-3 bg-muted rounded-full overflow-hidden">
               <div
@@ -318,11 +321,7 @@ export default function Dashboard() {
               <p className="text-red-400 font-bold">{connectionError}</p>
               <button
                 onClick={() => {
-                  setShowConnectionScreen(false)
-                  setConnectionMethod(null)
-                  setProgress(0)
-                  setLogs([])
-                  setConnectionError('')
+                  closeConnectionScreen()
                 }}
                 className="mt-4 px-6 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-smooth btn-touch"
               >
@@ -489,9 +488,19 @@ export default function Dashboard() {
                           </div>
                         )}
                       </div>
-                      <p className="mt-6 text-xs text-muted-foreground text-center max-w-[200px]">
-                        Abra o WhatsApp &gt; Configurações &gt; Dispositivos Conectados
-                      </p>
+                      <button
+                        onClick={() => {
+                          setShowConnectionScreen(true)
+                          setConnectionActive(true)
+                          setConnectionMethod('qr')
+                          setProgress(40)
+                          addLog('Monitorando conexão via QR Code...', 'info')
+                        }}
+                        className="mt-6 btn-primary px-6 py-3 flex items-center gap-2"
+                      >
+                        <RefreshCw className="w-5 h-5" />
+                        Monitorar Conexão
+                      </button>
                     </div>
 
                     {/* Pairing Code Display */}
