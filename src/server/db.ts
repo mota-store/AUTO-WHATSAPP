@@ -8,10 +8,34 @@ let db: ReturnType<typeof drizzle> | null = null
 export async function getDb() {
   if (!db) {
     const databaseUrl = process.env.DATABASE_URL || ''
-    const connection = await mysql.createConnection(databaseUrl.includes('?') 
-      ? `${databaseUrl}&ssl={"rejectUnauthorized":true}`
-      : `${databaseUrl}?ssl={"rejectUnauthorized":true}`
-    )
+    
+    // Extrair informações da URL para garantir que o banco de dados seja selecionado
+    // mysql://user:pass@host:port/db_name
+    const urlPattern = /^mysql:\/\/(.+):(.+)@(.+):(\d+)\/(.+)$/
+    const match = databaseUrl.split('?')[0].match(urlPattern)
+    
+    let connectionConfig: any = {
+      uri: databaseUrl,
+      ssl: {
+        rejectUnauthorized: true
+      }
+    }
+
+    if (match) {
+      const [,, , host, port, database] = match
+      connectionConfig = {
+        host,
+        port: parseInt(port),
+        user: match[1],
+        password: match[2],
+        database: database,
+        ssl: {
+          rejectUnauthorized: true
+        }
+      }
+    }
+
+    const connection = await mysql.createConnection(connectionConfig)
     db = drizzle(connection, { schema, mode: 'default' })
   }
   return db
