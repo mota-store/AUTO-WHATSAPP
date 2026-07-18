@@ -170,12 +170,17 @@ export async function updateWhatsappStatus(instanceId: number, status: string, q
 // Menu Flow queries
 export async function createMenuFlow(userId: number, name: string, description: string | undefined, flowData: any) {
   const database = await getDb()
+  
+  // Verificar se já existe algum fluxo para este usuário
+  const existingFlows = await getUserMenuFlows(userId)
+  const shouldBeActive = existingFlows.length === 0
+
   const result = await database.insert(schema.menuFlows).values({
     userId,
     name,
     description,
     flowData: typeof flowData === 'object' ? JSON.stringify(flowData) : flowData,
-    isActive: true,
+    isActive: shouldBeActive,
   })
   return result
 }

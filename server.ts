@@ -359,14 +359,17 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   const sessionPath = `sessions/session-${userId}`
 
   // SEMPRE limpar sessão na primeira conexão (mesmo se creds estão salvas)
-  // Isso evita o bug onde creds.registered=true mas a sessão está corrompida/incompleta
-  if (!isReconnect && fs.existsSync(sessionPath)) {
-    try {
-      fs.rmSync(sessionPath, { recursive: true, force: true })
-      console.log('[MOTA-FLOW] Sessão antiga removida (nova conexão)')
-    } catch (e) {
-      console.log('[MOTA-FLOW] Erro ao remover sessão:', e)
+  if (!isReconnect) {
+    if (fs.existsSync(sessionPath)) {
+      try {
+        fs.rmSync(sessionPath, { recursive: true, force: true })
+        console.log('[MOTA-FLOW] Sessão antiga removida (nova conexão)')
+      } catch (e) {
+        console.error('[MOTA-FLOW] Erro ao remover sessão antiga:', e)
+      }
     }
+    // Limpar o cache de sessões em memória também
+    sessions.delete(userId)
   }
 
   const sessionDir = path.dirname(sessionPath)
@@ -387,7 +390,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
     },
     logger: pino({ level: 'silent' }),
-    browser: Browsers.ubuntu('Chrome'),
+    browser: Browsers.ubuntu('MotaFlow'),
     connectTimeoutMs: 30000,
     keepAliveIntervalMs: 15000,
     printQRInTerminal: false,
@@ -460,22 +463,19 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
           }, 5000)
         }
       } else {
-        // Modo QR: SALVAR APENAS 1 QR por sessão
-        if (!hasSavedQr) {
-          hasSavedQr = true
-          try {
-            const qrBase64 = await QRCode.toDataURL(qr, {
-              width: 256,
-              margin: 1,
-              color: { dark: '#000000', light: '#FFFFFF' }
-            })
-            await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: qrBase64, pairingCode: null })
-            console.log('[MOTA-FLOW] QR Code salvo no banco (único)')
-          } catch (err: any) {
-            console.error('[MOTA-FLOW] Erro QR Base64:', err?.message)
-            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qr)}`
-            await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: qrUrl, pairingCode: null })
-          }
+        // Modo QR: Salvar o QR Code
+        try {
+          const qrBase64 = await QRCode.toDataURL(qr, {
+            width: 256,
+            margin: 1,
+            color: { dark: '#000000', light: '#FFFFFF' }
+          })
+          await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: qrBase64, pairingCode: null })
+          console.log('[MOTA-FLOW] QR Code atualizado no banco')
+        } catch (err: any) {
+          console.error('[MOTA-FLOW] Erro QR Base64:', err?.message)
+          const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qr)}`
+          await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: qrUrl, pairingCode: null })
         }
       }
     }

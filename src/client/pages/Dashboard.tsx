@@ -72,6 +72,7 @@ export default function Dashboard() {
   // Start fast polling when modal is open (every 2s instead of 5s)
   const startFastPolling = () => {
     if (pollRef.current) clearInterval(pollRef.current)
+    loadDashboard() // Executa imediatamente
     pollRef.current = setInterval(loadDashboard, 2000)
   }
 
@@ -348,7 +349,11 @@ export default function Dashboard() {
                 </div>
                 <div className="flex flex-col gap-3 pt-2">
                   <button 
-                    onClick={() => { setConnectMethod('qr'); setShowConnectModal(true); }}
+                    onClick={() => { 
+                      setConnectMethod('qr'); 
+                      setShowConnectModal(true);
+                      handleConnect(false); // Inicia conexão QR imediatamente
+                    }}
                     className="w-full py-4 bg-white text-black rounded-xl font-black text-sm hover:bg-zinc-200 transition-all flex items-center justify-center gap-2 active:scale-95"
                   >
                     <Zap className="w-4 h-4" /> Conectar via QR Code
@@ -377,7 +382,12 @@ export default function Dashboard() {
 
                 <div className="flex p-1 bg-black/40 rounded-xl border border-zinc-800/50">
                   <button 
-                    onClick={() => setConnectMethod('qr')}
+                    onClick={() => {
+                      if (connectMethod !== 'qr') {
+                        setConnectMethod('qr');
+                        handleConnect(false);
+                      }
+                    }}
                     className={`flex-1 py-2.5 rounded-lg text-xs font-black transition-all ${connectMethod === 'qr' ? 'bg-zinc-800 text-white' : 'text-zinc-500'}`}
                   >
                     QR CODE
