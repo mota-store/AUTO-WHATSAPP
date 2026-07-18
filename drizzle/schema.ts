@@ -48,7 +48,7 @@ export const messageLogs = sqliteTable("message_logs", {
   messageText: text("message_text").notNull(),
   responseText: text("response_text"),
   flowId: integer("flow_id"),
-  timestamp: timestamp("timestamp").default("CURRENT_TIMESTAMP").notNull(),
+  timestamp: text("timestamp").default("CURRENT_TIMESTAMP").notNull(),
 });
 
 export type User = typeof users.$inferSelect;
