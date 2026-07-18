@@ -245,7 +245,7 @@ export default function Dashboard() {
         <div className="max-w-4xl mx-auto w-full space-y-8 -mt-20">
           
           {/* Header */}
-          <header className="flex flex-col gap-4">
+          <header className="flex flex-col gap-4 -ml-[5px]">
             <div className="space-y-2">
               <h1 className="text-5xl font-black tracking-tight bg-gradient-to-r from-white to-zinc-500 bg-clip-text text-transparent">
                 Olá, Bem-vindo
