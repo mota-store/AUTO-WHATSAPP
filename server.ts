@@ -329,11 +329,17 @@ function buildMenuMessage(menu: MenuNode): string {
 }
 
 // Servir arquivos estáticos do Frontend (React)
-const distPath = path.resolve(__dirname, 'dist')
+// O Vite está configurado para gerar o build em dist/client
+const distPath = path.resolve(__dirname, 'dist', 'client')
 console.log(`📂 [SYSTEM] Tentando servir arquivos estáticos de: ${distPath}`)
 
+// Log de depuração para ver o que existe na pasta dist
+if (fs.existsSync(path.resolve(__dirname, 'dist'))) {
+  console.log('📂 [DEBUG] Conteúdo de /dist:', fs.readdirSync(path.resolve(__dirname, 'dist')))
+}
+
 if (fs.existsSync(distPath)) {
-  console.log('✅ [SYSTEM] Pasta dist encontrada!')
+  console.log('✅ [SYSTEM] Pasta dist/client encontrada!')
   app.use(express.static(distPath))
   
   // Fallback para SPA (Single Page Application)
@@ -343,7 +349,19 @@ if (fs.existsSync(distPath)) {
     }
   })
 } else {
-  console.error('❌ [SYSTEM] Pasta dist NÃO encontrada no caminho:', distPath)
+  console.error('❌ [SYSTEM] Pasta dist/client NÃO encontrada no caminho:', distPath)
+  
+  // Tentar um fallback para a pasta dist raiz caso o build tenha ido para lá
+  const fallbackPath = path.resolve(__dirname, 'dist')
+  if (fs.existsSync(path.join(fallbackPath, 'index.html'))) {
+    console.log('✅ [SYSTEM] Fallback: index.html encontrado na raiz da pasta dist!')
+    app.use(express.static(fallbackPath))
+    app.get('*', (req, res) => {
+      if (!req.path.startsWith('/api')) {
+        res.sendFile(path.join(fallbackPath, 'index.html'))
+      }
+    })
+  }
 }
 
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
