@@ -262,6 +262,11 @@ export async function syncSchema() {
     `)
     console.log('✅ [DB] Tabela users verificada/criada')
 
+    // Adicionar colunas que podem não existir (para tabelas já criadas anteriormente)
+    await connection.execute(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT`).catch(() => {})
+    await connection.execute(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMP`).catch(() => {})
+    console.log('✅ [DB] Colunas reset_token e reset_token_expiry verificadas/criadas')
+
     // Create whatsapp_instances table
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS whatsapp_instances (
