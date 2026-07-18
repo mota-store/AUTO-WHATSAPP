@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "NODE_ENV=development node --watch server.js",
     "build": "vite build",
-    "start": "NODE_ENV=production npx tsx server.ts",
+    "start": "npm run build && NODE_ENV=production npx tsx server.ts",
     "db:push": "drizzle-kit push",
     "test": "vitest run"
   },
