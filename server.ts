@@ -344,7 +344,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
     },
     logger: pino({ level: 'silent' }),
-    browser: Browsers.ubuntu('Chrome'),
+    browser: Browsers.ubuntu('Chrome MOTA-FLOW'),
     connectTimeoutMs: 30000,
     keepAliveIntervalMs: 15000,
     printQRInTerminal: false,
@@ -473,16 +473,19 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
       console.log(`[MOTA-FLOW] Conexão fechada: ${statusCode}`)
       console.log(`[MOTA-FLOW] DisconnectReason.loggedOut = ${DisconnectReason.loggedOut}`)
+      console.log(`[MOTA-FLOW] DisconnectReason.restartRequired = ${DisconnectReason.restartRequired}`)
 
-      // 515 = DEVICE_REMOVED (replaced by another device) - NÃO reconectar, limpar tudo
+      // 515 = restartRequired (esperado APÓS pairing code aprovado) - RECONNECTAR
       // 401 = loggedOut - NÃO reconectar
       // 408 = connectionLost - reconectar
       // 428 = connectionClosed - reconectar
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut && statusCode !== 515
+      // DisconnectReason.restartRequired = 515 (é o mesmo valor)
+      const shouldReconnect = statusCode !== DisconnectReason.loggedOut
 
       if (shouldReconnect) {
-        const delay = statusCode === 408 ? 2000 : 5000
-        console.log(`[MOTA-FLOW] Reconectando em ${delay}ms...`)
+        // Após 515 (restartRequired), reconectar mais rápido pois as credenciais já estão salvas
+        const delay = statusCode === 515 ? 1500 : (statusCode === 408 ? 2000 : 5000)
+        console.log(`[MOTA-FLOW] Reconectando em ${delay}ms (statusCode ${statusCode})...`)
         setTimeout(() => connectToWhatsApp(userId, instanceId), delay)
       } else {
         console.log(`[MOTA-FLOW] Desconectado definitivamente (statusCode ${statusCode}), não reconectar`)

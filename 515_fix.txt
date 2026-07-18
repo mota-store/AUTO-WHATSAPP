@@ -1,0 +1,18 @@
+SOLUÇÃO DO PROBLEMA 515:
+
+O 515 NÃO é um erro de desconexão definitiva. É o "restartRequired" do Baileys.
+Após o pairing code ser aprovado no celular:
+1. pair-success chega (creds.update com registered=true)
+2. O socket fecha com 515 (restartRequired) - COMPORTAMENTO ESPERADO
+3. PRECISAMOS RECONNECTAR com as novas credenciais salvas
+4. Na segunda conexão, o socket abre normalmente (connection=open)
+
+O erro que estávamos cometendo: tratávamos 515 como "device removed" e NÃO reconectávamos.
+A correção: 515 DEVE reconectar. Somente 401 (loggedOut) deve parar.
+
+Sequência correta:
+- connection=connecting, registered=false → gerar QR/pairing
+- pair-success → connection=undefined, registered=true
+- connection=close, code=515 → RECONNECTAR (setTimeout 1500ms)
+- connection=connecting, registered=true → nova conexão
+- connection=open → ✅ CONECTADO!
