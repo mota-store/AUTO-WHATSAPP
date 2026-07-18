@@ -214,6 +214,20 @@ export async function updateMenuFlow(
     .where(eq(schema.menuFlows.id, flowId))
 }
 
+export async function activateFlow(userId: number, flowId: number) {
+  const database = await getDb()
+  // Desativar todos os fluxos do usuário
+  await database
+    .update(schema.menuFlows)
+    .set({ isActive: false })
+    .where(eq(schema.menuFlows.userId, userId))
+  // Ativar o fluxo escolhido
+  await database
+    .update(schema.menuFlows)
+    .set({ isActive: true })
+    .where(eq(schema.menuFlows.id, flowId))
+}
+
 export async function deleteMenuFlow(flowId: number) {
   const database = await getDb()
   await database

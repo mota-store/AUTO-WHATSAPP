@@ -9,6 +9,8 @@ import {
   ExternalLink, 
   RefreshCw,
   Search,
+  Power,
+  PowerOff,
 } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
 
@@ -44,6 +46,26 @@ export default function Flows() {
       toast.error('Erro ao carregar fluxos')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleActivate = async (id: number, isActive: boolean) => {
+    if (isActive) {
+      toast.info('Este fluxo já está ativo')
+      return
+    }
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/flows/${id}/activate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (response.ok) {
+        toast.success('Fluxo ativado! Os outros foram desativados.')
+        loadFlows()
+      }
+    } catch (error) {
+      toast.error('Erro ao ativar fluxo')
     }
   }
 
@@ -148,6 +170,17 @@ export default function Flows() {
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button 
+                        onClick={() => handleActivate(flow.id, flow.isActive)}
+                        className={`p-2 rounded-lg transition-all ${
+                          flow.isActive 
+                            ? 'text-emerald-500 bg-emerald-500/10' 
+                            : 'text-zinc-500 hover:text-primary hover:bg-primary/10'
+                        }`}
+                        title={flow.isActive ? 'Fluxo ativo' : 'Ativar fluxo'}
+                      >
+                        {flow.isActive ? <Power className="w-4 h-4" /> : <PowerOff className="w-4 h-4" />}
+                      </button>
+                      <button 
                         onClick={() => handleDelete(flow.id)}
                         className="p-2 text-zinc-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
                       >
@@ -157,7 +190,16 @@ export default function Flows() {
                   </div>
 
                   <div className="flex items-center justify-between pt-3 mt-3 border-t border-zinc-800/50">
-                    <span className="text-[10px] font-bold text-zinc-600">{new Date(flow.createdAt).toLocaleDateString()}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-zinc-600">{new Date(flow.createdAt).toLocaleDateString()}</span>
+                      <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${
+                        flow.isActive 
+                          ? 'bg-emerald-500/20 text-emerald-400' 
+                          : 'bg-zinc-800 text-zinc-600'
+                      }`}>
+                        {flow.isActive ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </div>
                     <button 
                       onClick={() => navigate(`/flow-preview/${flow.id}`)}
                       className="px-4 py-2 bg-primary/10 text-primary rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 hover:bg-primary hover:text-white transition-all active:scale-95"

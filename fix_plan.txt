@@ -1,0 +1,25 @@
+Plano de correções:
+
+1. BROWSER: trocar Browsers.macOS('Chrome') para array customizado ['Chrome', 'MotaFlow', '1.0.0']
+   - Se quebrar a conexão, voltar pra ubuntu Chrome
+
+2. QR CODE: O problema é que quando creds.registered=true (sessão salva de antes), o QR nunca é emitido
+   - Na primeira conexão (endpoint connect), sempre limpar a sessão ANTES de criar o socket
+   - O código atual já faz isso: if (!isReconnect && fs.existsSync(sessionPath)) fs.rmSync
+   - O problema pode ser que o endpoint /api/whatsapp/connect chama connectToWhatsApp SEM isReconnect=false (undefined = falsy, então funciona)
+   - MAS: se a sessão foi salva de uma tentativa anterior que FALHOU (515), o creds.registered pode estar true mas incompleto
+   - Solução: SEMPRE limpar sessão na primeira conexão (endpoint connect), independente de creds.registered
+
+3. MENU PRINCIPAL/SUB-MENU no WhatsApp:
+   - O WhatsApp adiciona "forwardedName" automaticamente quando o bot envia mensagem
+   - Isso vem do buildInfo e não tem como remover via quoted (que já removemos)
+   - O forwardedName no WhatsApp é baseado no buildInfo do WAProto
+   - Na verdade, o que aparece no topo é o "quoted" da mensagem - já removemos isso
+   - Se ainda aparece, pode ser o "contextInfo" que o Baileys adiciona automaticamente
+   - Vou adicionar buildInfo no sendMessage para sobrescrever
+
+4. MÚLTIPLOS FLUXOS:
+   - Adicionar endpoint POST /api/flows/:flowId/activate para ativar um fluxo e desativar os outros
+   - Adicionar função db.activateFlow(userId, flowId) que desativa todos e ativa o escolhido
+   - No Flows.tsx, adicionar toggle/selector visual para escolher qual fluxo está ativo
+   - Mostrar badge "ATIVO" no fluxo ativo e "INATIVO" nos outros

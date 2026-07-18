@@ -329,6 +329,17 @@ app.put('/api/flows/:flowId', authMiddleware, async (req: Request, res: Response
   }
 })
 
+app.post('/api/flows/:flowId/activate', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as AuthPayload
+    const flowId = parseInt(req.params.flowId)
+    await db.activateFlow(user.userId, flowId)
+    res.json({ message: 'Fluxo ativado' })
+  } catch (error) {
+    res.status(500).json({ message: 'Erro ao ativar fluxo' })
+  }
+})
+
 app.delete('/api/flows/:flowId', authMiddleware, async (req: Request, res: Response) => {
   try {
     await db.deleteMenuFlow(parseInt(req.params.flowId))
@@ -347,7 +358,8 @@ function cleanPhoneNumber(num: string): string {
 async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber?: string, isReconnect = false) {
   const sessionPath = `sessions/session-${userId}`
 
-  // Apenas limpar sessão na PRIMEIRA conexão (não na reconexão pós-515)
+  // SEMPRE limpar sessão na primeira conexão (mesmo se creds estão salvas)
+  // Isso evita o bug onde creds.registered=true mas a sessão está corrompida/incompleta
   if (!isReconnect && fs.existsSync(sessionPath)) {
     try {
       fs.rmSync(sessionPath, { recursive: true, force: true })
@@ -375,7 +387,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
     },
     logger: pino({ level: 'silent' }),
-    browser: Browsers.macOS('Chrome'),
+    browser: Browsers.ubuntu('Chrome'),
     connectTimeoutMs: 30000,
     keepAliveIntervalMs: 15000,
     printQRInTerminal: false,
@@ -387,22 +399,17 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   // Guardar o número usado nesta sessão para reconexão
   const reconnectPhone = phoneNumber
 
-  // SE credenciais já estão registradas (reconexão ou sessão persistente)
-  // NÃO precisa de QR nem pairing, conectar direto
-  if (state.creds.registered) {
-    console.log('[MOTA-FLOW] Sessão já registrada, conectando direto (sem QR/pairing)...')
-    // Não adicionar número ao pendingPairingNumbers (não precisa de pairing)
-    // Não salvar QR
-  } else {
-    // Credenciais NÃO registradas - precisa de QR ou pairing
-    
-    // Armazenar número para pairing se fornecido
-    if (phoneNumber) {
-      const cleanNumber = cleanPhoneNumber(phoneNumber)
-      pendingPairingNumbers.set(userId, cleanNumber)
-      console.log(`[MOTA-FLOW] Número para pairing: ${cleanNumber}`)
+    // SEMPRE precisa de QR/pairing na primeira conexão (não na reconexão)
+    // Mesmo se creds.registered=true, na primeira conexão limpamos a sessão
+    // e o Baileys vai emitir QR ou aceitar pairing
+    if (!isReconnect) {
+      // Armazenar número para pairing se fornecido
+      if (phoneNumber) {
+        const cleanNumber = cleanPhoneNumber(phoneNumber)
+        pendingPairingNumbers.set(userId, cleanNumber)
+        console.log(`[MOTA-FLOW] Número para pairing: ${cleanNumber}`)
+      }
     }
-  }
   
   sock.ev.on('creds.update', async () => {
     console.log('[MOTA-FLOW] creds.update chamado - salvando credenciais...')

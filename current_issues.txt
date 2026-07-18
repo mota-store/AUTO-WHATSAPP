@@ -1,0 +1,21 @@
+Problemas identificados:
+
+1. QR Code não gera / Pairing não funciona
+   - O problema: quando creds.registered=false e phoneNumber é fornecido, o número é adicionado ao pendingPairingNumbers
+   - O QR é recebido pelo Baileys, entra no handler, encontra pendingPairingNumbers, solicita pairing
+   - MAS: o problema pode ser que o QR NUNCA chega quando as credenciais estão salvas de uma tentativa anterior
+   - Se o usuário já conectou antes e a sessão está salva (creds.registered=true), o QR nunca é emitido
+   - Solução: garantir que na PRIMEIRA conexão (não reconnect), sempre limpe a sessão ANTES de verificar creds
+
+2. MENU PRINCIPAL/SUB-MENU aparece no topo do WhatsApp
+   - Isso é o forwardedName do WhatsApp que aparece quando o bot envia mensagens
+   - Já removemos quoted, mas o problema pode ser o buildInfo/forwardingScore nas opções
+   - O Baileys adiciona automaticamente contextInfo com forwardedName quando usa o nome do bot
+   - Preciso verificar se há alguma opção de sendMessage que causa isso
+
+3. Browser: trocar Mac OS por MotaFlow
+   - Browsers.macOS('Chrome') → mudar para array customizado ou outro formato
+
+4. Múltiplos fluxos com toggle
+   - Já existe isActive no schema e toggle na UI
+   - O backend já filtra por isActive: flows.find((f) => f.isActive)
