@@ -7,6 +7,8 @@ import { MenuFlowData, MenuNode, MenuOption } from './drizzle/schema'
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import makeWASocket, {
   DisconnectReason,
   useMultiFileAuthState,
@@ -26,6 +28,9 @@ const lastConnectionAttempt = new Map<number, number>()
 const messageStates = new Map<string, { flowId: number, menuId: string, userId: number, instanceId: number }>()
 const app = express()
 const PORT = process.env.PORT || 3000
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 console.log('🚀 [MOTA-FLOW] Iniciando servidor...');
 
@@ -321,6 +326,19 @@ function buildMenuMessage(menu: MenuNode): string {
   let msg = `*${menu.title}*\n\n${menu.message}\n\n`
   menu.options.forEach(o => { msg += `*${o.number}* - ${o.text}\n` })
   return msg.trim()
+}
+
+// Servir arquivos estáticos do Frontend (React)
+const distPath = path.join(__dirname, 'dist')
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath))
+  
+  // Fallback para SPA (Single Page Application)
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api')) {
+      res.sendFile(path.join(distPath, 'index.html'))
+    }
+  })
 }
 
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
