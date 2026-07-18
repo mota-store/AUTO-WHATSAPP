@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Lock, CheckCircle2 } from 'lucide-react'
-import ThemeToggle from '../components/ThemeToggle'
 
 export default function ResetPassword() {
   const { token } = useParams<{ token: string }>()
@@ -69,10 +68,6 @@ export default function ResetPassword() {
     <div className="min-h-screen flex items-center justify-center gradient-bg px-4 relative overflow-hidden">
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px] animate-pulse"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/20 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }}></div>
-
-      <div className="absolute top-8 right-8">
-        <ThemeToggle />
-      </div>
 
       <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-8">

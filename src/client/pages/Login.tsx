@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Mail, Lock, Eye, EyeOff, Wifi, ArrowRight } from 'lucide-react'
-import ThemeToggle from '../components/ThemeToggle'
 
 // Modal inline de Forgot Password
 function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
@@ -126,10 +125,6 @@ export default function Login() {
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px] animate-pulse"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/20 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }}></div>
       
-      <div className="absolute top-8 right-8">
-        <ThemeToggle />
-      </div>
-
       <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center p-4 bg-primary rounded-3xl shadow-primary animate-float mb-6">

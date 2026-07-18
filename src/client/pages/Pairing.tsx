@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Phone, Copy, Check, ArrowLeft, Loader2, MessageSquare } from 'lucide-react'
 import { toast } from 'sonner'
-import ThemeToggle from '../components/ThemeToggle'
 
 export default function Pairing() {
   const [phoneNumber, setPhoneNumber] = useState('')
@@ -92,7 +91,7 @@ export default function Pairing() {
           >
             <ArrowLeft className="w-6 h-6 text-slate-600 dark:text-slate-400" />
           </button>
-          <ThemeToggle />
+
         </div>
 
         <div className="glass-card p-8 space-y-6 text-center">
