@@ -91,36 +91,78 @@ export default function Settings() {
     }
   }
 
+  // Compress image using canvas before sending to server
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const img = new Image()
+        img.onload = () => {
+          // Calculate target size: max 500x500 for avatar
+          const maxSize = 500
+          let width = img.width
+          let height = img.height
+          
+          if (width > height && width > maxSize) {
+            height = Math.round((height * maxSize) / width)
+            width = maxSize
+          } else if (height > maxSize) {
+            width = Math.round((width * maxSize) / height)
+            height = maxSize
+          }
+
+          const canvas = document.createElement('canvas')
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          if (!ctx) return reject(new Error('Canvas context not available'))
+          
+          ctx.drawImage(img, 0, 0, width, height)
+          
+          // Compress as JPEG with 0.7 quality
+          const compressed = canvas.toDataURL('image/jpeg', 0.7)
+          resolve(compressed)
+        }
+        img.onerror = () => reject(new Error('Erro ao carregar imagem'))
+        img.src = e.target?.result as string
+      }
+      reader.onerror = () => reject(new Error('Erro ao ler arquivo'))
+      reader.readAsDataURL(file)
+    })
+  }
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onloadend = async () => {
-        const base64String = reader.result as string
-        setProfileImage(base64String)
-        
-        try {
-          const token = localStorage.getItem('token')
-          const response = await fetch('/api/auth/update-avatar', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`
-            },
-            body: JSON.stringify({ avatar: base64String })
-          })
+    if (!file) return
 
-          if (response.ok) {
-            localStorage.setItem('profileImage', base64String)
-            toast.success('Foto salva!')
-          } else {
-            toast.error('Erro ao salvar foto')
-          }
-        } catch (error) {
-          toast.error('Erro de conexão')
-        }
+    setIsLoading(true)
+    try {
+      // Compress the image client-side
+      const compressedBase64 = await compressImage(file)
+      setProfileImage(compressedBase64)
+      
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/auth/update-avatar', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ avatar: compressedBase64 })
+      })
+
+      if (response.ok) {
+        localStorage.setItem('profileImage', compressedBase64)
+        toast.success('Foto salva com sucesso!')
+      } else {
+        const data = await response.json()
+        toast.error(data.message || 'Erro ao salvar foto')
       }
-      reader.readAsDataURL(file)
+    } catch (error: any) {
+      toast.error('Erro ao processar imagem')
+      console.error('Image upload error:', error)
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -189,7 +231,11 @@ export default function Settings() {
           {/* Avatar */}
           <div className="relative group">
             <div className="w-28 h-28 rounded-2xl bg-zinc-900 border-2 border-zinc-800 overflow-hidden shadow-xl transition-all group-hover:border-primary/50">
-              {profileImage ? (
+              {isLoading ? (
+                <div className="w-full h-full flex items-center justify-center bg-zinc-900">
+                  <RefreshCw className="w-8 h-8 text-primary animate-spin" />
+                </div>
+              ) : profileImage ? (
                 <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-zinc-900">
@@ -197,9 +243,9 @@ export default function Settings() {
                 </div>
               )}
             </div>
-            <label className="absolute bottom-1 right-1 p-2.5 bg-primary text-white rounded-xl shadow-lg cursor-pointer hover:scale-110 active:scale-95 transition-all">
+            <label className={`absolute bottom-1 right-1 p-2.5 bg-primary text-white rounded-xl shadow-lg cursor-pointer hover:scale-110 active:scale-95 transition-all ${isLoading ? 'opacity-50 pointer-events-none' : ''}`}>
               <Camera className="w-4 h-4" />
-              <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+              <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} disabled={isLoading} />
             </label>
           </div>
 

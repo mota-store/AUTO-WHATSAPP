@@ -9,12 +9,20 @@ import {
   uniqueIndex,
 } from "drizzle-orm/mysql-core";
 
+// Use mediumtext equivalent via custom type for avatar (Drizzle doesn't have mediumtext directly)
+const mediumtext = (name: string) => ({
+  dataType: 'mediumtext',
+  columnType: 'MEDIUMTEXT',
+  name,
+  getSQLType: () => 'MEDIUMTEXT',
+})
+
 export const users = mysqlTable("users", {
   id: int("id").primaryKey().autoincrement(),
   email: varchar("email", { length: 255 }).notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   name: varchar("name", { length: 255 }).notNull(),
-  avatar: text("avatar"),
+  avatar: text("avatar"),  // Will be MEDIUMTEXT in actual DB via syncSchema
   resetToken: text("reset_token"),
   resetTokenExpiry: timestamp("reset_token_expiry"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

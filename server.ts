@@ -40,6 +40,25 @@ console.log('🚀 [MOTA-FLOW] Iniciando servidor...')
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }))
 app.use(express.json({ limit: '10mb' }))
 
+// Cache for Baileys version to avoid repeated HTTPS calls
+let cachedBaileysVersion: [number, number, number] | null = null
+
+async function getBaileysVersion(): Promise<[number, number, number]> {
+  if (cachedBaileysVersion) return cachedBaileysVersion
+  try {
+    const start = Date.now()
+    const { version } = await fetchLatestBaileysVersion()
+    cachedBaileysVersion = version
+    console.log(`[MOTA-FLOW] Versão Baileys carregada em ${Date.now() - start}ms:`, version.join('.'))
+    return version
+  } catch (err) {
+    console.error('[MOTA-FLOW] Erro ao buscar versão Baileys, usando padrão:', err)
+    // Fallback: versão conhecida estável
+    cachedBaileysVersion = [2, 2413, 1]
+    return cachedBaileysVersion
+  }
+}
+
 // Auth middleware
 async function authMiddleware(req: Request, res: Response, next: NextFunction) {
   const token = extractToken(req.headers.authorization)
@@ -104,10 +123,30 @@ app.post('/api/auth/update-avatar', authMiddleware, async (req: Request, res: Re
   try {
     const userPayload = (req as any).user as AuthPayload
     const { avatar } = req.body
+    
+    if (!avatar) {
+      return res.status(400).json({ message: 'Imagem obrigatória' })
+    }
+
+    // Validate base64 and limit size (max 500KB after base64 encoding = ~375KB image)
+    if (!avatar.startsWith('data:image/')) {
+      return res.status(400).json({ message: 'Formato de imagem inválido' })
+    }
+
+    // Check size - TEXT column supports 64KB, but we allow up to 500KB base64
+    // by using MEDIUMTEXT column. Still warn if too large.
+    const base64Data = avatar.split(',')[1] || ''
+    const sizeKB = Math.round((base64Data.length * 0.75) / 1024)
+    
+    if (sizeKB > 500) {
+      return res.status(400).json({ message: 'Imagem muito grande. Máximo 500KB.' })
+    }
+
     await db.updateUserAvatar(userPayload.userId, avatar)
     res.json({ message: 'Foto de perfil atualizada' })
   } catch (error: any) {
-    res.status(500).json({ message: 'Erro ao atualizar foto' })
+    console.error('[AVATAR ERROR]', error?.message, error?.stack)
+    res.status(500).json({ message: 'Erro ao atualizar foto de perfil', detail: error?.message })
   }
 })
 
@@ -141,23 +180,17 @@ app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
 
     const user = await db.getUserByEmail(email)
     if (!user) {
-      // Não revelar se o email existe ou não
       return res.json({ message: 'Se o email existir, você receberá um link de redefinição' })
     }
 
-    // Gerar token de reset
     const resetToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
-    const resetTokenExpiry = new Date(Date.now() + 3600000) // 1 hora
+    const resetTokenExpiry = new Date(Date.now() + 3600000)
 
     await db.updateResetToken(user.id, resetToken, resetTokenExpiry)
-
-    // Retornar resposta imediatamente para o frontend
     res.json({ message: 'Se o email existir, você receberá um link de redefinição' })
 
-    // Enviar e-mail em background (fire-and-forget)
     const resetUrl = `${process.env.APP_URL || 'https://auto-whatsapp-production-73d9.up.railway.app'}/reset-password/${resetToken}`
-    const userEmail = email
-    const targetEmail = userEmail
+    const targetEmail = email
 
     setImmediate(async () => {
       try {
@@ -192,13 +225,12 @@ app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
 
         const data = await res.json()
         if (res.ok) {
-          console.log('[EMAIL OK] E-mail de reset enviado para', targetEmail, '- Message ID:', (data as any)?.message_id)
+          console.log('[EMAIL OK] E-mail de reset enviado para', targetEmail)
         } else {
           console.error('[EMAIL ERROR] Mailtrap rejeitou:', JSON.stringify(data))
         }
       } catch (emailErr: any) {
         console.error('[EMAIL ERROR] Falha ao enviar e-mail:', emailErr?.message)
-        console.error('[EMAIL ERROR] Stack:', emailErr?.stack)
       }
     })
   } catch (error: any) {
@@ -217,7 +249,6 @@ app.post('/api/auth/reset-password', async (req: Request, res: Response) => {
     const user = await db.getUserByResetToken(token)
     if (!user) return res.status(400).json({ message: 'Token inválido ou expirado' })
 
-    // Verificar se o token expirou
     if (user.resetTokenExpiry && new Date(user.resetTokenExpiry) < new Date()) {
       await db.clearResetToken(user.id)
       return res.status(400).json({ message: 'Token expirado. Solicite um novo.' })
@@ -308,12 +339,8 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
   console.log('[MOTA-FLOW] Auth state carregado, registered:', state.creds.registered)
 
-  // Se registrado e conectando, não precisa gerar QR/Pairing
-  if (state.creds.registered && !phoneNumber) {
-    console.log('[MOTA-FLOW] Sessão já registrada, conectando diretamente...')
-  }
-
-  const { version } = await fetchLatestBaileysVersion()
+  // Get cached version instead of fetching every time
+  const version = await getBaileysVersion()
 
   const sock = makeWASocket({
     version,
@@ -323,9 +350,10 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     },
     logger: pino({ level: 'silent' }),
     browser: Browsers.ubuntu('Chrome'),
-    connectTimeoutMs: 120000,
+    connectTimeoutMs: 60000,  // Reduced from 120s to 60s
     keepAliveIntervalMs: 15000,
-    printQRInTerminal: false
+    printQRInTerminal: false,
+    maxMsgRetryCount: 3,
   })
 
   sessions.set(userId, sock)
@@ -350,7 +378,11 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     if (qr) {
       console.log('[MOTA-FLOW] QR Code recebido, gerando imagem...')
       try {
-        const qrBase64 = await QRCode.toDataURL(qr)
+        const qrBase64 = await QRCode.toDataURL(qr, {
+          width: 256,
+          margin: 1,
+          color: { dark: '#000000', light: '#FFFFFF' }
+        })
         console.log('[MOTA-FLOW] QR Code Base64 gerado com sucesso')
         await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: qrBase64, pairingCode: null })
       } catch (err: any) {
@@ -452,7 +484,7 @@ app.post('/api/whatsapp/pairing-code', authMiddleware, async (req: Request, res:
     }
 
     const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
-    const { version } = await fetchLatestBaileysVersion()
+    const version = await getBaileysVersion()
 
     const sock = makeWASocket({
       version,
@@ -462,7 +494,7 @@ app.post('/api/whatsapp/pairing-code', authMiddleware, async (req: Request, res:
       },
       logger: pino({ level: 'silent' }),
       browser: Browsers.ubuntu('Chrome'),
-      connectTimeoutMs: 120000,
+      connectTimeoutMs: 60000,
       keepAliveIntervalMs: 15000,
       printQRInTerminal: false
     })
@@ -563,11 +595,9 @@ function buildMenuMessage(menu: MenuNode): string {
 }
 
 // Servir arquivos estáticos do Frontend (React)
-// O Vite está configurado para gerar o build em dist/client
 const distPath = path.resolve(__dirname, 'dist', 'client')
 console.log(`📂 [SYSTEM] Tentando servir arquivos estáticos de: ${distPath}`)
 
-// Log de depuração para ver o que existe na pasta dist
 if (fs.existsSync(path.resolve(__dirname, 'dist'))) {
   console.log('📂 [DEBUG] Conteúdo de /dist:', fs.readdirSync(path.resolve(__dirname, 'dist')))
 }
@@ -576,7 +606,6 @@ if (fs.existsSync(distPath)) {
   console.log('✅ [SYSTEM] Pasta dist/client encontrada!')
   app.use(express.static(distPath))
 
-  // Fallback para SPA (Single Page Application)
   app.get('*', (req, res) => {
     if (!req.path.startsWith('/api')) {
       res.sendFile(path.join(distPath, 'index.html'))
@@ -585,7 +614,6 @@ if (fs.existsSync(distPath)) {
 } else {
   console.error('❌ [SYSTEM] Pasta dist/client NÃO encontrada no caminho:', distPath)
 
-  // Tentar um fallback para a pasta dist raiz caso o build tenha ido para lá
   const fallbackPath = path.resolve(__dirname, 'dist')
   if (fs.existsSync(path.join(fallbackPath, 'index.html'))) {
     console.log('✅ [SYSTEM] Fallback: index.html encontrado na raiz da pasta dist!')

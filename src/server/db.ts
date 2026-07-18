@@ -14,7 +14,6 @@ export async function getDb() {
         throw new Error('DATABASE_URL não configurada')
       }
 
-      // Parse the MySQL URL for TiDB Cloud connection
       const url = new URL(databaseUrl)
       pool = mysql.createPool({
         uri: databaseUrl,
@@ -79,10 +78,21 @@ export async function updateUserPassword(id: number, passwordHash: string) {
 
 export async function updateUserAvatar(id: number, avatar: string) {
   const database = await getDb()
-  await database
-    .update(schema.users)
-    .set({ avatar })
-    .where(eq(schema.users.id, id))
+  try {
+    await database
+      .update(schema.users)
+      .set({ avatar })
+      .where(eq(schema.users.id, id))
+    return true
+  } catch (error: any) {
+    console.error('[DB AVATAR ERROR]', error?.message)
+    // If it's a data too long error, try with MEDIUMTEXT column
+    if (error?.message?.includes('too long') || error?.code === 'ER_DATA_TOO_LONG') {
+      console.error('[DB AVATAR ERROR] Coluna avatar muito pequena, imagem rejeitada')
+      throw new Error('Imagem muito grande para o banco de dados. Use uma imagem menor.')
+    }
+    throw error
+  }
 }
 
 export async function updateResetToken(userId: number, resetToken: string, resetTokenExpiry: Date) {
@@ -118,7 +128,6 @@ export async function createWhatsappInstance(userId: number) {
     userId,
     status: 'disconnected',
   })
-  // Buscar a instância criada para retornar com o id
   return getWhatsappInstance(userId)
 }
 
@@ -137,10 +146,17 @@ export async function updateWhatsappInstance(
   data: Partial<typeof schema.whatsappInstances.$inferInsert>
 ) {
   const database = await getDb()
-  await database
-    .update(schema.whatsappInstances)
-    .set(data)
-    .where(eq(schema.whatsappInstances.id, instanceId))
+  try {
+    await database
+      .update(schema.whatsappInstances)
+      .set(data)
+      .where(eq(schema.whatsappInstances.id, instanceId))
+  } catch (error: any) {
+    // If qr_code is too long for TEXT, we'll get an error
+    // This shouldn't happen since QR base64 is small (~3KB)
+    console.error('[DB WA UPDATE ERROR]', error?.message)
+    throw error
+  }
 }
 
 export async function updateWhatsappStatus(instanceId: number, status: string, qrCode: string | null) {
@@ -245,14 +261,14 @@ export async function syncSchema() {
 
     const connection = await pool.getConnection()
 
-    // Create users table
+    // Create users table - using MEDIUMTEXT for avatar to support up to 16MB
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
         email VARCHAR(255) NOT NULL UNIQUE,
         password_hash TEXT NOT NULL,
         name VARCHAR(255) NOT NULL,
-        avatar TEXT,
+        avatar MEDIUMTEXT,
         reset_token TEXT,
         reset_token_expiry TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -262,7 +278,24 @@ export async function syncSchema() {
     `)
     console.log('✅ [DB] Tabela users verificada/criada')
 
-    // Verificar e adicionar colunas que podem não existir
+    // Check and fix avatar column type if it's still TEXT (too small)
+    try {
+      const [colInfo] = await connection.execute(
+        `SELECT COLUMN_NAME, COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'avatar'`
+      )
+      const colData = (colInfo as any[])
+      if (colData.length > 0 && colData[0].COLUMN_TYPE === 'text') {
+        console.log('[DB] Alterando coluna avatar de TEXT para MEDIUMTEXT...')
+        await connection.execute(`ALTER TABLE users MODIFY COLUMN avatar MEDIUMTEXT`)
+        console.log('✅ [DB] Coluna avatar alterada para MEDIUMTEXT (suporta até 16MB)')
+      } else {
+        console.log('✅ [DB] Coluna avatar já está com tipo adequado')
+      }
+    } catch (err: any) {
+      console.warn('[DB] Aviso ao verificar/alterar coluna avatar:', err.message)
+    }
+
+    // Check and add missing columns
     const [colsResult] = await connection.execute(
       `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME IN ('reset_token', 'reset_token_expiry', 'avatar')`
     )
@@ -270,7 +303,7 @@ export async function syncSchema() {
     console.log('📊 [DB] Colunas existentes na tabela users:', existingCols)
     for (const col of ['avatar', 'reset_token', 'reset_token_expiry']) {
       if (!existingCols.includes(col)) {
-        const colType = col === 'reset_token_expiry' ? 'TIMESTAMP' : 'TEXT'
+        const colType = col === 'reset_token_expiry' ? 'TIMESTAMP' : (col === 'avatar' ? 'MEDIUMTEXT' : 'TEXT')
         try {
           await connection.execute(`ALTER TABLE users ADD COLUMN ${col} ${colType}`)
           console.log(`✅ [DB] Coluna ${col} adicionada com sucesso`)
@@ -283,7 +316,7 @@ export async function syncSchema() {
     }
     console.log('✅ [DB] Colunas da tabela users verificadas/criadas')
 
-    // Verificar colunas da tabela whatsapp_instances
+    // Check whatsapp_instances columns
     const [waColsResult] = await connection.execute(
       `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'whatsapp_instances' AND COLUMN_NAME IN ('pairing_code')`
     )
