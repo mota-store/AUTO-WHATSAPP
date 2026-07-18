@@ -370,6 +370,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   // HANDLER ÚNICO de connection.update
   let pairingRequested = false  // garantir que só chama uma vez
   let qrReceived = false  // indica que o socket está conectado ao servidor WA
+  let hasSavedQr = false  // garantir que só 1 QR é salvo no banco por sessão
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update
@@ -407,20 +408,23 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
             }
           }, 5000)
         }
-      } else {
-        // Modo QR: salvar e mostrar o QR
-        try {
-          const qrBase64 = await QRCode.toDataURL(qr, {
-            width: 256,
-            margin: 1,
-            color: { dark: '#000000', light: '#FFFFFF' }
-          })
-          await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: qrBase64, pairingCode: null })
-          console.log('[MOTA-FLOW] QR Code salvo no banco')
-        } catch (err: any) {
-          console.error('[MOTA-FLOW] Erro QR Base64:', err?.message)
-          const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qr)}`
-          await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: qrUrl, pairingCode: null })
+      } else if (!isReconnect) {
+        // Modo QR: SALVAR APENAS 1 QR por sessão
+        if (!hasSavedQr) {
+          hasSavedQr = true
+          try {
+            const qrBase64 = await QRCode.toDataURL(qr, {
+              width: 256,
+              margin: 1,
+              color: { dark: '#000000', light: '#FFFFFF' }
+            })
+            await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: qrBase64, pairingCode: null })
+            console.log('[MOTA-FLOW] QR Code salvo no banco (único)')
+          } catch (err: any) {
+            console.error('[MOTA-FLOW] Erro QR Base64:', err?.message)
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qr)}`
+            await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: qrUrl, pairingCode: null })
+          }
         }
       }
     }
