@@ -161,37 +161,42 @@ app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
 
     setImmediate(async () => {
       try {
-        console.log('[EMAIL] Iniciando envio para', targetEmail)
-        const transporter = nodemailer.createTransport({
-          host: 'smtp-relay.brevo.com',
-          port: 587,
-          secure: false,
-          auth: {
-            user: process.env.BREVO_SMTP_USER || '',
-            pass: process.env.BREVO_SMTP_PASSWORD || '',
+        console.log('[EMAIL] Enviando e-mail para', targetEmail)
+        const apiKey = process.env.BREVO_API_KEY || ''
+        if (!apiKey) {
+          console.error('[EMAIL ERROR] BREVO_API_KEY não configurada')
+          return
+        }
+
+        const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'api-key': apiKey,
           },
-          connectionTimeout: 10000,
-          greetingTimeout: 10000,
-          socketTimeout: 15000,
+          body: JSON.stringify({
+            sender: { email: 'b26c7b001@smtp-brevo.com', name: 'MOTA-FLOW' },
+            to: [{ email: targetEmail }],
+            subject: 'Redefinição de Senha - MOTA-FLOW',
+            htmlContent: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h1 style="color: #25D366;">MOTA-FLOW</h1>
+                <h2>Redefinição de Senha</h2>
+                <p>Você solicitou a redefinição de senha para sua conta MOTA-FLOW.</p>
+                <p>Clique no botão abaixo para redefinir sua senha:</p>
+                <a href="${resetUrl}" style="display: inline-block; background: #25D366; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">Redefinir Senha</a>
+                <p style="color: #666; font-size: 12px; margin-top: 24px;">Este link expira em 1 hora. Se você não solicitou isso, ignore este e-mail.</p>
+              </div>
+            `,
+          }),
         })
 
-        await transporter.sendMail({
-          from: `MOTA-FLOW <${process.env.BREVO_SMTP_USER || 'b26c7b001@smtp-brevo.com'}>`,
-          to: targetEmail,
-          subject: 'Redefinição de Senha - MOTA-FLOW',
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h1 style="color: #25D366;">MOTA-FLOW</h1>
-              <h2>Redefinição de Senha</h2>
-              <p>Você solicitou a redefinição de senha para sua conta MOTA-FLOW.</p>
-              <p>Clique no botão abaixo para redefinir sua senha:</p>
-              <a href="${resetUrl}" style="display: inline-block; background: #25D366; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">Redefinir Senha</a>
-              <p style="color: #666; font-size: 12px; margin-top: 24px;">Este link expira em 1 hora. Se você não solicitou isso, ignore este e-mail.</p>
-            </div>
-          `,
-        })
-
-        console.log('[EMAIL OK] E-mail de reset enviado para', targetEmail)
+        const data = await res.json()
+        if (res.ok) {
+          console.log('[EMAIL OK] E-mail de reset enviado para', targetEmail, '- Message ID:', data.messageId)
+        } else {
+          console.error('[EMAIL ERROR] Brevo API rejeitou:', JSON.stringify(data))
+        }
       } catch (emailErr: any) {
         console.error('[EMAIL ERROR] Falha ao enviar e-mail:', emailErr?.message)
         console.error('[EMAIL ERROR] Stack:', emailErr?.stack)
