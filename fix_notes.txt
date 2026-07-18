@@ -1,0 +1,25 @@
+DESCOBERTAS CRÍTICAS:
+
+1. PAIRING CODE:
+- Segundo a documentação oficial do Baileys, requestPairingCode DEVE ser chamado DENTRO do evento connection.update
+- Especificamente quando connection === "connecting" ou quando qr é emitido
+- NÃO pode ser chamado diretamente após criar o socket - a conexão precisa estar em andamento
+- Erro "Connection Closed" (statusCode 428) ocorre quando tenta chamar requestPairingCode antes do socket estar conectado
+- A solução correta: ouvir o evento connection.update e quando connection === "connecting" OU qr é emitido, chamar requestPairingCode
+
+2. QR CODE:
+- O QR deve ser emitido automaticamente quando o socket não tem credenciais registradas
+- Se não está emitindo, pode ser porque:
+  a) A sessão está sendo deletada mas o Baileys acha que está registrada (rare)
+  b) A conexão com WhatsApp servers está muito lenta (Railway)
+  c) A versão do Baileys não está compatível com o server do WhatsApp
+
+SOLUÇÃO PARA PAIRING CODE:
+- Mover a lógica de requestPairingCode para DENTRO do evento connection.update
+- Chamar requestPairingCode quando connection === "connecting" ou quando qr é emitido
+- Garantir que o número esteja no formato E.164 sem + (ex: 5591988887777)
+
+SOLUÇÃO PARA QR CODE:
+- Verificar que a sessão é limpa corretamente
+- Adicionar timeout: se QR não aparecer em 30s, mostrar erro claro
+- Adicionar log mais detalhado para debugar

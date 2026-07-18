@@ -1,0 +1,35 @@
+ANÁLISE DO PROBLEMA DE CONEXÃO
+
+PROBLEMA 1: QR Code não aparece automaticamente
+- Quando o usuário clica "Conectar via QR Code", o modal abre
+- O backend /api/whatsapp/connect é chamado com usePairingCode=false, phoneNumber=undefined
+- O backend chama connectToWhatsApp() que cria o socket e espera o evento 'qr' do Baileys
+- O Baileys DEVE emitir 'qr' automaticamente quando a sessão não está registrada
+- MAS: a sessão é DELETADA a cada conexão (rmSync), então o Baileys deveria gerar QR
+
+PROBLEMA PROVÁVEL: 
+- O Baileys precisa do socket estar conectado ao servidor do WhatsApp para gerar o QR
+- O evento 'qr' é emitido dentro de 'connection.update' mas APENAS se a conexão falhar
+- Na verdade, o QR é emitido quando o socket tenta conectar mas não tem credenciais registradas
+- Se fetchLatestBaileysVersion() ainda está lento (primeira vez após restart), o QR demora
+
+PROBLEMA 2: Pairing Code não funciona
+- O modal de pairing abre, mostra input de número
+- Quando clica "Gerar Código", chama handleConnect(true) 
+- Isso chama /api/whatsapp/connect com usePairingCode=true e phoneNumber
+- O backend chama connectToWhatsApp com phoneNumber
+- Dentro de connectToWhatsApp, se phoneNumber existe E credenciales não registradas, chama requestPairingCode
+- requestPairingCode precisa que o socket ESTEJA CONECTADO ao WhatsApp server primeiro
+- O socket pode não estar conectado ainda quando requestPairingCode é chamado
+
+SOLUÇÕES:
+1. Para QR: garantir que o Baileys gere QR rapidamente após iniciar
+   - Usar versão cacheada (já feito)
+   - Adicionar timeout de fallback: se QR não aparecer em 15s, mostrar erro claro
+   - Verificar se o problema é que o Baileys não conecta ao server do WA
+
+2. Para Pairing Code:
+   - requestPairingCode precisa que o socket esteja conectado
+   - Adicionar um delay/wait antes de chamar requestPairingCode
+   - Ou usar o evento 'connection.update' para saber quando está pronto
+   - Verificar se o phone number está no formato correto (sem +, sem espaços, com código do país)

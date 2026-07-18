@@ -25,8 +25,7 @@ import QRCode from 'qrcode'
 
 const execAsync = promisify(exec)
 const sessions = new Map<number, any>()
-const pairingCodeRequests = new Map<number, { number: string, attempts: number, timer: any }>()
-const lastConnectionAttempt = new Map<number, number>()
+const pendingPairingNumbers = new Map<number, string>()  // userId -> phoneNumber
 const messageStates = new Map<string, { flowId: number, menuId: string, userId: number, instanceId: number }>()
 const app = express()
 const PORT = process.env.PORT || 8080
@@ -128,13 +127,10 @@ app.post('/api/auth/update-avatar', authMiddleware, async (req: Request, res: Re
       return res.status(400).json({ message: 'Imagem obrigatória' })
     }
 
-    // Validate base64 and limit size (max 500KB after base64 encoding = ~375KB image)
     if (!avatar.startsWith('data:image/')) {
       return res.status(400).json({ message: 'Formato de imagem inválido' })
     }
 
-    // Check size - TEXT column supports 64KB, but we allow up to 500KB base64
-    // by using MEDIUMTEXT column. Still warn if too large.
     const base64Data = avatar.split(',')[1] || ''
     const sizeKB = Math.round((base64Data.length * 0.75) / 1024)
     
@@ -172,7 +168,7 @@ app.get('/api/dashboard', authMiddleware, async (req: Request, res: Response) =>
   }
 })
 
-// Forgot Password - Solicitar reset
+// Forgot Password
 app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
   try {
     const { email } = req.body
@@ -314,7 +310,13 @@ app.delete('/api/flows/:flowId', authMiddleware, async (req: Request, res: Respo
   }
 })
 
-// WHATSAPP CORE LOGIC
+// ============ WHATSAPP CORE LOGIC ============
+
+function cleanPhoneNumber(num: string): string {
+  // Remove everything except digits
+  return num.replace(/\D/g, '')
+}
+
 async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber?: string) {
   const sessionPath = `sessions/session-${userId}`
 
@@ -339,6 +341,11 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
   console.log('[MOTA-FLOW] Auth state carregado, registered:', state.creds.registered)
 
+  // Se já registrado, não precisa de QR/Pairing
+  if (state.creds.registered) {
+    console.log('[MOTA-FLOW] Sessão já registrada, conectando diretamente...')
+  }
+
   // Get cached version instead of fetching every time
   const version = await getBaileysVersion()
 
@@ -350,7 +357,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     },
     logger: pino({ level: 'silent' }),
     browser: Browsers.ubuntu('Chrome'),
-    connectTimeoutMs: 60000,  // Reduced from 120s to 60s
+    connectTimeoutMs: 60000,
     keepAliveIntervalMs: 15000,
     printQRInTerminal: false,
     maxMsgRetryCount: 3,
@@ -359,24 +366,20 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   sessions.set(userId, sock)
   sock.ev.on('creds.update', saveCreds)
 
-  // Pairing Code Logic
-  if (phoneNumber && !state.creds.registered) {
-    console.log(`[MOTA-FLOW] Solicitando Pairing Code para ${phoneNumber}...`)
-    try {
-      const code = await sock.requestPairingCode(phoneNumber)
-      console.log(`[MOTA-FLOW] Pairing Code gerado: ${code}`)
-      await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
-    } catch (err: any) {
-      console.error('[MOTA-FLOW] Erro ao solicitar Pairing Code:', err?.message)
-      await db.updateWhatsappInstance(instanceId, { status: 'disconnected' })
-    }
+  // Store pairing number if provided
+  if (phoneNumber) {
+    const cleanNumber = cleanPhoneNumber(phoneNumber)
+    pendingPairingNumbers.set(userId, cleanNumber)
+    console.log(`[MOTA-FLOW] Número para pairing armazenado: ${cleanNumber}`)
   }
 
+  // CONNECTION UPDATE HANDLER - QR e Pairing Code dentro do evento
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update
 
+    // QR CODE: emitido automaticamente quando não tem credenciais
     if (qr) {
-      console.log('[MOTA-FLOW] QR Code recebido, gerando imagem...')
+      console.log('[MOTA-FLOW] QR Code recebido do WhatsApp!')
       try {
         const qrBase64 = await QRCode.toDataURL(qr, {
           width: 256,
@@ -393,12 +396,30 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       }
     }
 
+    // PAIRING CODE: chamar requestPairingCode DENTRO do connection.update
+    // quando connection === "connecting" e não está registrado
+    if ((connection === 'connecting' || !!qr) && pendingPairingNumbers.has(userId) && !state.creds.registered) {
+      const number = pendingPairingNumbers.get(userId)!
+      pendingPairingNumbers.delete(userId)  // Remove para não chamar novamente
+      console.log(`[MOTA-FLOW] Solicitando Pairing Code para ${number}...`)
+      try {
+        const code = await sock.requestPairingCode(number)
+        console.log(`[MOTA-FLOW] Pairing Code gerado: ${code}`)
+        await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
+      } catch (err: any) {
+        console.error('[MOTA-FLOW] Erro ao solicitar Pairing Code:', err?.message, err?.stack)
+        await db.updateWhatsappInstance(instanceId, { status: 'disconnected' })
+      }
+    }
+
+    // CONECTADO
     if (connection === 'open') {
       const phone = sock.user?.id?.split(':')[0] || 'desconhecido'
       console.log(`[MOTA-FLOW] Conectado! Número: ${phone}`)
       await db.updateWhatsappInstance(instanceId, { status: 'connected', phoneNumber: phone, qrCode: null, pairingCode: null })
     }
 
+    // DESCONECTADO
     if (connection === 'close') {
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
       console.log(`[MOTA-FLOW] Conexão fechada: ${statusCode}`)
@@ -429,7 +450,8 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   })
 }
 
-// WhatsApp Actions
+// ============ WHATSAPP ENDPOINTS ============
+
 app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Response) => {
   try {
     const user = (req as any).user as AuthPayload
@@ -450,7 +472,11 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
     // Limpar qrCode e pairingCode antes de iniciar nova conexão
     await db.updateWhatsappInstance(instance.id, { status: 'connecting', qrCode: null, pairingCode: null })
 
-    connectToWhatsApp(user.userId, instance.id, usePairingCode ? phoneNumber : undefined)
+    // Clean phone number if provided
+    const cleanPhone = phoneNumber ? cleanPhoneNumber(phoneNumber) : undefined
+    
+    // Start connection (fire and forget)
+    connectToWhatsApp(user.userId, instance.id, usePairingCode ? cleanPhone : undefined)
 
     res.json({ message: 'Conexão iniciada', instanceId: instance.id })
   } catch (error: any) {
@@ -459,7 +485,7 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
   }
 })
 
-// Pairing Code endpoint
+// Pairing Code endpoint (separado)
 app.post('/api/whatsapp/pairing-code', authMiddleware, async (req: Request, res: Response) => {
   try {
     const user = (req as any).user as AuthPayload
@@ -473,62 +499,11 @@ app.post('/api/whatsapp/pairing-code', authMiddleware, async (req: Request, res:
 
     await db.updateWhatsappInstance(instance.id, { status: 'connecting' })
 
-    // Iniciar conexão com Baileys e gerar pairing code
-    const sessionPath = `sessions/session-${user.userId}`
-    const sessionDir = path.dirname(sessionPath)
-    if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir, { recursive: true })
+    // Start connection with pairing code approach
+    const cleanPhone = cleanPhoneNumber(phoneNumber)
+    connectToWhatsApp(user.userId, instance.id, cleanPhone)
 
-    // Limpar sessão anterior
-    if (fs.existsSync(sessionPath)) {
-      fs.rmSync(sessionPath, { recursive: true, force: true })
-    }
-
-    const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
-    const version = await getBaileysVersion()
-
-    const sock = makeWASocket({
-      version,
-      auth: {
-        creds: state.creds,
-        keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
-      },
-      logger: pino({ level: 'silent' }),
-      browser: Browsers.ubuntu('Chrome'),
-      connectTimeoutMs: 60000,
-      keepAliveIntervalMs: 15000,
-      printQRInTerminal: false
-    })
-
-    sessions.set(user.userId, sock)
-    sock.ev.on('creds.update', saveCreds)
-
-    try {
-      const code = await sock.requestPairingCode(phoneNumber)
-      console.log(`[PAIRING CODE] Código gerado: ${code}`)
-      await db.updateWhatsappInstance(instance.id, { status: 'connecting', pairingCode: code })
-
-      // Continuar monitorando conexão
-      sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect } = update
-        if (connection === 'open') {
-          const phone = sock.user?.id?.split(':')[0]
-          await db.updateWhatsappInstance(instance.id, { status: 'connected', phoneNumber: phone, qrCode: null, pairingCode: null })
-        }
-        if (connection === 'close') {
-          const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
-          if (statusCode !== DisconnectReason.loggedOut) {
-            setTimeout(() => connectToWhatsApp(user.userId, instance.id), 5000)
-          } else {
-            await db.updateWhatsappStatus(instance.id, 'disconnected', null)
-          }
-        }
-      })
-
-      res.json({ code })
-    } catch (err: any) {
-      console.error('[PAIRING CODE ERROR]', err?.message)
-      res.status(500).json({ message: 'Erro ao gerar código de pareamento' })
-    }
+    res.json({ message: 'Conexão iniciada, aguarde o código' })
   } catch (error: any) {
     console.error('[PAIRING CODE ERROR]', error?.message, error?.stack)
     res.status(500).json({ message: 'Erro ao gerar código' })
@@ -553,7 +528,8 @@ app.post('/api/whatsapp/:instanceId/disconnect', authMiddleware, async (req: Req
   }
 })
 
-// Funções de Processamento de Mensagem e Build Menu
+// ============ MESSAGE PROCESSING ============
+
 async function processMessage(sock: any, msg: any, userId: number, instanceId: number, flowData: MenuFlowData) {
   const sender = msg.key?.remoteJid
   const messageText = msg.message?.conversation || msg.message?.extendedTextMessage?.text || ''
@@ -594,7 +570,8 @@ function buildMenuMessage(menu: MenuNode): string {
   return msg.trim()
 }
 
-// Servir arquivos estáticos do Frontend (React)
+// ============ SERVE STATIC FILES ============
+
 const distPath = path.resolve(__dirname, 'dist', 'client')
 console.log(`📂 [SYSTEM] Tentando servir arquivos estáticos de: ${distPath}`)
 
@@ -631,7 +608,8 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   res.status(500).json({ message: err.message })
 })
 
-// Bootstrap: sincronizar schema do banco de dados
+// ============ BOOTSTRAP ============
+
 async function bootstrap() {
   try {
     console.log('🔄 [MOTA-FLOW] Sincronizando schema do banco de dados...')
