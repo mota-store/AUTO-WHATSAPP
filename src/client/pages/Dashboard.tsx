@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { 
   Zap, 
   ShieldCheck, 
@@ -29,6 +30,7 @@ interface WhatsappInstance {
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate()
   const [instance, setInstance] = useState<WhatsappInstance | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [showConnectModal, setShowConnectModal] = useState(false)
@@ -80,7 +82,6 @@ export default function Dashboard() {
           usePairingCode: usePairing 
         }),
       })
-      toast.success('Iniciando conexão...')
       if (usePairing) setConnectMethod('pairing')
     } catch (error) {
       toast.error('Erro ao conectar')
@@ -171,7 +172,13 @@ export default function Dashboard() {
                       ) : (
                         <div className="w-full h-full flex flex-col items-center justify-center gap-4">
                           <RefreshCw className="w-10 h-10 text-zinc-200 animate-spin" />
-                          <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Gerando...</p>
+                          <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Gerando QR Code...</p>
+                          <button 
+                            onClick={() => handleConnect(false)}
+                            className="text-[10px] font-black text-primary hover:text-primary/80 uppercase tracking-widest"
+                          >
+                            Clique aqui se não gerar
+                          </button>
                         </div>
                       )}
                     </div>
@@ -181,12 +188,6 @@ export default function Dashboard() {
                         2. Vá em <span className="text-white">Aparelhos Conectados</span><br/>
                         3. Aponte a câmera para este código
                       </p>
-                      <button 
-                        onClick={() => handleConnect(false)}
-                        className="text-xs font-black text-primary hover:text-primary/80 uppercase tracking-widest flex items-center justify-center gap-2 mx-auto"
-                      >
-                        <RefreshCw className="w-3 h-3" /> Reiniciar Geração
-                      </button>
                     </div>
                   </div>
                 ) : (
@@ -243,13 +244,13 @@ export default function Dashboard() {
       <main className="flex-1 lg:ml-72 p-6 lg:p-12 transition-all duration-500 overflow-hidden h-screen flex flex-col justify-center">
         <div className="max-w-4xl mx-auto w-full space-y-8 -mt-20">
           
-          {/* Header Centralizado */}
-          <header className="flex flex-col items-center text-center gap-4">
+          {/* Header */}
+          <header className="flex flex-col gap-4">
             <div className="space-y-2">
               <h1 className="text-5xl font-black tracking-tight bg-gradient-to-r from-white to-zinc-500 bg-clip-text text-transparent">
                 Olá, Bem-vindo
               </h1>
-              <p className="text-zinc-500 font-medium flex items-center justify-center gap-2">
+              <p className="text-zinc-500 font-medium flex items-center gap-2">
                 Sua automação inteligente está pronta <Zap className="w-4 h-4 text-primary" />
               </p>
             </div>
@@ -292,7 +293,7 @@ export default function Dashboard() {
                 </div>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
                   <button 
-                    onClick={() => { setConnectMethod('qr'); setShowConnectModal(true); handleConnect(false); }}
+                    onClick={() => { setConnectMethod('qr'); setShowConnectModal(true); }}
                     className="w-full sm:w-auto px-10 py-5 bg-white text-black rounded-2xl font-black text-sm hover:bg-zinc-200 transition-all flex items-center justify-center gap-2"
                   >
                     <Zap className="w-5 h-5" /> Conectar via QR Code

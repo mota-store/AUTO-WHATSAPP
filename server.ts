@@ -181,26 +181,36 @@ app.delete('/api/flows/:flowId', authMiddleware, async (req: Request, res: Respo
   }
 })
 
-// WHATSAPP CORE LOGIC - MELHORADA PARA RAILWAY
+// WHATSAPP CORE LOGIC
 async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber?: string) {
-  const now = Date.now()
-  const lastAttempt = lastConnectionAttempt.get(userId) || 0
-
-  // Trava de segurança reduzida para 30s para ser mais responsivo
-  if (now - lastAttempt < 30000 && !phoneNumber) {
-    console.log(`⏳ [MOTA-FLOW] Aguardando 30s para usuário ${userId}`)
-    return
-  }
-
-  lastConnectionAttempt.set(userId, now)
   const sessionPath = `sessions/session-${userId}`
 
-  // Limpeza de sessão antiga se estiver tentando reconectar do zero
-  if (phoneNumber && fs.existsSync(sessionPath)) {
-    try { fs.rmSync(sessionPath, { recursive: true, force: true }) } catch (e) {}
+  console.log(`[MOTA-FLOW] Iniciando conexão para usuário ${userId}, método: ${phoneNumber ? 'Pairing Code' : 'QR Code'}`)
+
+  // Limpeza de sessão antiga sempre que iniciar nova conexão
+  if (fs.existsSync(sessionPath)) {
+    try {
+      fs.rmSync(sessionPath, { recursive: true, force: true })
+      console.log('[MOTA-FLOW] Sessão antiga removida')
+    } catch (e) {
+      console.log('[MOTA-FLOW] Erro ao remover sessão antiga:', e)
+    }
+  }
+
+  // Criar diretório de sessão
+  const sessionDir = path.dirname(sessionPath)
+  if (!fs.existsSync(sessionDir)) {
+    fs.mkdirSync(sessionDir, { recursive: true })
   }
 
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
+  console.log('[MOTA-FLOW] Auth state carregado, registered:', state.creds.registered)
+
+  // Se registrado e conectando, não precisa gerar QR/Pairing
+  if (state.creds.registered && !phoneNumber) {
+    console.log('[MOTA-FLOW] Sessão já registrada, conectando diretamente...')
+  }
+
   const { version } = await fetchLatestBaileysVersion()
 
   const sock = makeWASocket({
@@ -221,41 +231,43 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
 
   // Pairing Code Logic
   if (phoneNumber && !state.creds.registered) {
-    setTimeout(async () => {
-      try {
-        const code = await sock.requestPairingCode(phoneNumber)
-        console.log(`🔑 [MOTA-FLOW] Pairing Code para ${phoneNumber}: ${code}`)
-        await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code })
-      } catch (err) {
-        console.error('Erro ao solicitar Pairing Code:', err)
-      }
-    }, 5000)
+    console.log(`[MOTA-FLOW] Solicitando Pairing Code para ${phoneNumber}...`)
+    try {
+      const code = await sock.requestPairingCode(phoneNumber)
+      console.log(`[MOTA-FLOW] Pairing Code gerado: ${code}`)
+      await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
+    } catch (err: any) {
+      console.error('[MOTA-FLOW] Erro ao solicitar Pairing Code:', err?.message)
+      await db.updateWhatsappInstance(instanceId, { status: 'disconnected' })
+    }
   }
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update
 
     if (qr) {
+      console.log('[MOTA-FLOW] QR Code recebido, gerando imagem...')
       try {
         const qrBase64 = await QRCode.toDataURL(qr)
-        await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: qrBase64 })
-        console.log('📱 [MOTA-FLOW] QR Code gerado em Base64.')
-      } catch (err) {
+        console.log('[MOTA-FLOW] QR Code Base64 gerado com sucesso')
+        await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: qrBase64, pairingCode: null })
+      } catch (err: any) {
+        console.error('[MOTA-FLOW] Erro ao gerar QR Base64:', err?.message, 'Usando fallback...')
         const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qr)}`
-        await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: qrUrl })
-        console.log('📱 [MOTA-FLOW] QR Code gerado via API (Fallback).')
+        await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: qrUrl, pairingCode: null })
+        console.log('[MOTA-FLOW] QR Code gerado via API (Fallback).')
       }
     }
 
     if (connection === 'open') {
-      const phone = sock.user?.id.split(':')[0]
+      const phone = sock.user?.id?.split(':')[0] || 'desconhecido'
+      console.log(`[MOTA-FLOW] Conectado! Número: ${phone}`)
       await db.updateWhatsappInstance(instanceId, { status: 'connected', phoneNumber: phone, qrCode: null, pairingCode: null })
-      console.log('✅ [MOTA-FLOW] Conectado!')
     }
 
     if (connection === 'close') {
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
-      console.log(`📡 [MOTA-FLOW] Conexão fechada: ${statusCode}`)
+      console.log(`[MOTA-FLOW] Conexão fechada: ${statusCode}`)
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut
 
       if (shouldReconnect) {
@@ -288,15 +300,28 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
   try {
     const user = (req as any).user as AuthPayload
     const { phoneNumber, usePairingCode } = req.body
+    console.log(`[WHATSAPP CONNECT] userId=${user.userId}, phoneNumber=${phoneNumber}, usePairingCode=${usePairingCode}`)
+
+    // Se já existe uma sessão ativa, logout antes
+    const existingSession = sessions.get(user.userId)
+    if (existingSession) {
+      console.log('[WHATSAPP CONNECT] Existe sessão ativa, fazendo logout...')
+      try { existingSession.logout() } catch (e) {}
+      sessions.delete(user.userId)
+    }
+
     let instance = await db.getWhatsappInstance(user.userId)
     if (!instance) instance = await db.createWhatsappInstance(user.userId)
 
-    await db.updateWhatsappStatus(instance.id, 'connecting', null)
+    // Limpar qrCode e pairingCode antes de iniciar nova conexão
+    await db.updateWhatsappInstance(instance.id, { status: 'connecting', qrCode: null, pairingCode: null })
+
     connectToWhatsApp(user.userId, instance.id, usePairingCode ? phoneNumber : undefined)
 
-    res.json({ message: 'Iniciando conexão...' })
-  } catch (error) {
-    res.status(500).json({ message: 'Erro ao iniciar conexão' })
+    res.json({ message: 'Conexão iniciada', instanceId: instance.id })
+  } catch (error: any) {
+    console.error('[WHATSAPP CONNECT ERROR]', error?.message, error?.stack)
+    res.status(500).json({ message: 'Erro ao iniciar conexão', detail: error?.message })
   }
 })
 
