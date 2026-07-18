@@ -352,7 +352,15 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   })
 
   sessions.set(userId, sock)
-  sock.ev.on('creds.update', saveCreds)
+  sock.ev.on('creds.update', async () => {
+    console.log('[MOTA-FLOW] creds.update chamado - salvando credenciais...')
+    try {
+      await saveCreds()
+      console.log('[MOTA-FLOW] Credenciais salvas com sucesso')
+    } catch (err: any) {
+      console.error('[MOTA-FLOW] Erro ao salvar credenciais:', err?.message)
+    }
+  })
 
   // Armazenar número para pairing se fornecido
   if (phoneNumber) {
@@ -464,17 +472,24 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     if (connection === 'close') {
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
       console.log(`[MOTA-FLOW] Conexão fechada: ${statusCode}`)
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut
+      console.log(`[MOTA-FLOW] DisconnectReason.loggedOut = ${DisconnectReason.loggedOut}`)
+
+      // 515 = DEVICE_REMOVED (replaced by another device) - NÃO reconectar, limpar tudo
+      // 401 = loggedOut - NÃO reconectar
+      // 408 = connectionLost - reconectar
+      // 428 = connectionClosed - reconectar
+      const shouldReconnect = statusCode !== DisconnectReason.loggedOut && statusCode !== 515
 
       if (shouldReconnect) {
-        const delay = (statusCode === 515 || statusCode === 408 || statusCode === 401) ? 2000 : 5000
-        if (statusCode === 401 || statusCode === 408) {
-          await db.updateWhatsappStatus(instanceId, 'disconnected', null)
-        }
+        const delay = statusCode === 408 ? 2000 : 5000
+        console.log(`[MOTA-FLOW] Reconectando em ${delay}ms...`)
         setTimeout(() => connectToWhatsApp(userId, instanceId), delay)
       } else {
-        await db.updateWhatsappStatus(instanceId, 'disconnected', null)
+        console.log(`[MOTA-FLOW] Desconectado definitivamente (statusCode ${statusCode}), não reconectar`)
+        await db.updateWhatsappInstance(instanceId, { status: 'disconnected', phoneNumber: null, qrCode: null, pairingCode: null })
         sessions.delete(userId)
+        // Limpar sessão local
+        try { fs.rmSync(sessionPath, { recursive: true, force: true }) } catch {}
       }
     }
   })
