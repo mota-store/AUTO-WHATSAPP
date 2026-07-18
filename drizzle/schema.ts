@@ -2,7 +2,7 @@ import {
   integer,
   sqliteTable,
   text,
-  timestamp,
+
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
@@ -12,8 +12,8 @@ export const users = sqliteTable("users", {
   passwordHash: text("password_hash").notNull(),
   name: text("name").notNull(),
   avatar: text("avatar"),
-  createdAt: timestamp("created_at").default("CURRENT_TIMESTAMP").notNull(),
-  updatedAt: timestamp("updated_at").default("CURRENT_TIMESTAMP").notNull(),
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+  updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
 }, (users) => ({
   emailIdx: uniqueIndex("email_idx").on(users.email),
 }));
@@ -25,8 +25,8 @@ export const whatsappInstances = sqliteTable("whatsapp_instances", {
   status: text("status", { enum: ["disconnected", "connecting", "connected"] }).default("disconnected").notNull(),
   sessionData: text("session_data"),
   qrCode: text("qr_code"),
-  createdAt: timestamp("created_at").default("CURRENT_TIMESTAMP").notNull(),
-  updatedAt: timestamp("updated_at").default("CURRENT_TIMESTAMP").notNull(),
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+  updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
 });
 
 export const menuFlows = sqliteTable("menu_flows", {
@@ -36,8 +36,8 @@ export const menuFlows = sqliteTable("menu_flows", {
   description: text("description"),
   flowData: text("flow_data").$type<MenuFlowData>().notNull(),
   isActive: integer("is_active", { mode: "boolean" }).default(true).notNull(),
-  createdAt: timestamp("created_at").default("CURRENT_TIMESTAMP").notNull(),
-  updatedAt: timestamp("updated_at").default("CURRENT_TIMESTAMP").notNull(),
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+  updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
 });
 
 export const messageLogs = sqliteTable("message_logs", {
