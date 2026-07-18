@@ -365,10 +365,6 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
   console.log('[MOTA-FLOW] Auth state, registered:', state.creds.registered, 'isReconnect:', isReconnect)
 
-  if (state.creds.registered) {
-    console.log('[MOTA-FLOW] Sessão já registrada, conectando direto...')
-  }
-
   // Usar versão pré-carregada (já está no baileysVersion)
   const version = baileysVersion
 
@@ -390,6 +386,23 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   
   // Guardar o número usado nesta sessão para reconexão
   const reconnectPhone = phoneNumber
+
+  // SE credenciais já estão registradas (reconexão ou sessão persistente)
+  // NÃO precisa de QR nem pairing, conectar direto
+  if (state.creds.registered) {
+    console.log('[MOTA-FLOW] Sessão já registrada, conectando direto (sem QR/pairing)...')
+    // Não adicionar número ao pendingPairingNumbers (não precisa de pairing)
+    // Não salvar QR
+  } else {
+    // Credenciais NÃO registradas - precisa de QR ou pairing
+    
+    // Armazenar número para pairing se fornecido
+    if (phoneNumber) {
+      const cleanNumber = cleanPhoneNumber(phoneNumber)
+      pendingPairingNumbers.set(userId, cleanNumber)
+      console.log(`[MOTA-FLOW] Número para pairing: ${cleanNumber}`)
+    }
+  }
   
   sock.ev.on('creds.update', async () => {
     console.log('[MOTA-FLOW] creds.update chamado - salvando credenciais...')
@@ -401,24 +414,16 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     }
   })
 
-  // Armazenar número para pairing se fornecido
-  if (phoneNumber) {
-    const cleanNumber = cleanPhoneNumber(phoneNumber)
-    pendingPairingNumbers.set(userId, cleanNumber)
-    console.log(`[MOTA-FLOW] Número para pairing: ${cleanNumber}`)
-  }
-
-  // HANDLER ÚNICO de connection.update
-  let pairingRequested = false  // garantir que só chama uma vez
-  let qrReceived = false  // indica que o socket está conectado ao servidor WA
-  let hasSavedQr = false  // garantir que só 1 QR é salvo no banco por sessão
+  // HANDLER de connection.update
+  let pairingRequested = false
+  let qrReceived = false
+  let hasSavedQr = false
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update
 
-    // QR CODE: gerado automaticamente quando sem credenciais
-    // Isso também sinaliza que o socket está conectado ao servidor WA
-    if (qr) {
+    // QR CODE - só se NÃO está em reconexão e NÃO tem credenciais registradas
+    if (qr && !isReconnect && !state.creds.registered) {
       console.log('[MOTA-FLOW] QR Code recebido!')
       qrReceived = true
 
@@ -429,14 +434,12 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
         pendingPairingNumbers.delete(userId)
         console.log(`[MOTA-FLOW] Solicitando Pairing Code para: ${number} (após QR)...`)
         try {
-          // Limpar QR antes de solicitar pairing (não mostrar QR no frontend)
           await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: null, pairingCode: null })
           const code = await sock.requestPairingCode(number)
           console.log(`[MOTA-FLOW] Pairing Code: ${code}`)
           await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
         } catch (err: any) {
           console.error('[MOTA-FLOW] Erro Pairing Code:', err?.message, err?.stack)
-          // Se falhar mesmo após QR, tentar com retry após 5s
           console.log('[MOTA-FLOW] Tentando novamente em 5s...')
           setTimeout(async () => {
             try {
@@ -449,7 +452,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
             }
           }, 5000)
         }
-      } else if (!isReconnect) {
+      } else {
         // Modo QR: SALVAR APENAS 1 QR por sessão
         if (!hasSavedQr) {
           hasSavedQr = true
@@ -470,40 +473,6 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       }
     }
 
-    // Fallback: se está em connecting há tempo e não recebeu QR, tentar pairing direto
-    // (isso ajuda se o QR nunca é emitido por algum motivo)
-    if (!pairingRequested && !qrReceived && pendingPairingNumbers.has(userId) && connection === 'connecting') {
-      // Esperar 8 segundos para o socket estar pronto antes de tentar
-      const waitMs = 8000
-      console.log(`[MOTA-FLOW] Aguardando ${waitMs}ms para socket ficar pronto...`)
-      setTimeout(async () => {
-        if (!pairingRequested && pendingPairingNumbers.has(userId)) {
-          pairingRequested = true
-          const number = pendingPairingNumbers.get(userId)!
-          pendingPairingNumbers.delete(userId)
-          console.log(`[MOTA-FLOW] Solicitando Pairing Code (fallback) para: ${number}`)
-          try {
-            const code = await sock.requestPairingCode(number)
-            console.log(`[MOTA-FLOW] Pairing Code (fallback): ${code}`)
-            await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
-          } catch (err: any) {
-            console.error('[MOTA-FLOW] Erro Pairing Code (fallback):', err?.message, err?.stack)
-            // Retry após 5s
-            setTimeout(async () => {
-              try {
-                const code = await sock.requestPairingCode(number)
-                console.log(`[MOTA-FLOW] Pairing Code (fallback retry): ${code}`)
-                await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
-              } catch (retryErr: any) {
-                console.error('[MOTA-FLOW] Erro Pairing Code (fallback retry):', retryErr?.message)
-                await db.updateWhatsappInstance(instanceId, { status: 'disconnected' })
-              }
-            }, 5000)
-          }
-        }
-      }, waitMs)
-    }
-
     // CONECTADO
     if (connection === 'open') {
       const phone = sock.user?.id?.split(':')[0] || 'desconhecido'
@@ -515,27 +484,17 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     if (connection === 'close') {
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
       console.log(`[MOTA-FLOW] Conexão fechada: ${statusCode}`)
-      console.log(`[MOTA-FLOW] DisconnectReason.loggedOut = ${DisconnectReason.loggedOut}`)
-      console.log(`[MOTA-FLOW] DisconnectReason.restartRequired = ${DisconnectReason.restartRequired}`)
 
-      // 515 = restartRequired (esperado APÓS pairing code aprovado) - RECONNECTAR
       // 401 = loggedOut - NÃO reconectar
-      // 408 = connectionLost - reconectar
-      // 428 = connectionClosed - reconectar
-      // DisconnectReason.restartRequired = 515 (é o mesmo valor)
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut
-
-      if (shouldReconnect) {
-        // Manter status como 'connected' durante reconexão (não mudar para disconnected)
-        const delay = statusCode === 515 ? 1500 : (statusCode === 408 ? 2000 : 5000)
-        console.log(`[MOTA-FLOW] Reconectando em ${delay}ms (statusCode ${statusCode})...`)
-        setTimeout(() => connectToWhatsApp(userId, instanceId, reconnectPhone, true), delay)
-      } else {
+      // Qualquer outro (incluindo 515) = reconectar
+      if (statusCode === DisconnectReason.loggedOut) {
         console.log(`[MOTA-FLOW] Desconectado definitivamente (statusCode ${statusCode}), não reconectar`)
         await db.updateWhatsappInstance(instanceId, { status: 'disconnected', phoneNumber: null, qrCode: null, pairingCode: null })
         sessions.delete(userId)
-        // Limpar sessão local
         try { fs.rmSync(sessionPath, { recursive: true, force: true }) } catch {}
+      } else {
+        console.log(`[MOTA-FLOW] Reconectando em 1500ms (statusCode ${statusCode})...`)
+        setTimeout(() => connectToWhatsApp(userId, instanceId, reconnectPhone, true), 1500)
       }
     }
   })
