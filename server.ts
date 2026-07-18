@@ -542,11 +542,13 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
     let instance = await db.getWhatsappInstance(user.userId)
     if (!instance) instance = await db.createWhatsappInstance(user.userId)
 
-    // Limpar dados antigos
+    // Limpar dados antigos no banco para evitar loops de UI
     await db.updateWhatsappInstance(instance.id, { status: 'connecting', qrCode: null, pairingCode: null })
 
     const cleanPhone = phoneNumber ? cleanPhoneNumber(phoneNumber) : undefined
-    connectToWhatsApp(user.userId, instance.id, usePairingCode ? cleanPhone : undefined)
+    
+    // Iniciar conexão limpando o estado anterior
+    connectToWhatsApp(user.userId, instance.id, usePairingCode ? cleanPhone : undefined, false)
 
     res.json({ message: 'Conexão iniciada', instanceId: instance.id })
   } catch (error: any) {

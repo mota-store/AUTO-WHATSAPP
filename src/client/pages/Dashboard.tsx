@@ -219,13 +219,21 @@ export default function Dashboard() {
 
               <div className="flex p-1 bg-black/40 rounded-xl border border-zinc-800/50">
                 <button 
-                  onClick={() => { setConnectMethod('qr'); setShowPairingLoading(false); }}
+                  onClick={() => { 
+                    setConnectMethod('qr'); 
+                    setShowPairingLoading(false);
+                    if (instance) setInstance({ ...instance, qrCode: undefined, pairingCode: undefined });
+                  }}
                   className={`flex-1 py-3 rounded-lg text-xs font-black transition-all ${connectMethod === 'qr' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500'}`}
                 >
                   QR CODE
                 </button>
                 <button 
-                  onClick={() => { setConnectMethod('pairing'); setShowPairingLoading(false); }}
+                  onClick={() => { 
+                    setConnectMethod('pairing'); 
+                    setShowPairingLoading(false);
+                    if (instance) setInstance({ ...instance, qrCode: undefined, pairingCode: undefined });
+                  }}
                   className={`flex-1 py-3 rounded-lg text-xs font-black transition-all ${connectMethod === 'pairing' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500'}`}
                 >
                   NÚMERO
@@ -278,6 +286,15 @@ export default function Dashboard() {
                             <li>Digite o código</li>
                           </ol>
                         </div>
+                        <button 
+                          onClick={() => {
+                            if (instance) setInstance({ ...instance, pairingCode: undefined });
+                            setPhoneNumber('');
+                          }}
+                          className="w-full py-3 text-xs font-black text-zinc-500 hover:text-white transition-all uppercase tracking-widest"
+                        >
+                          Usar outro número
+                        </button>
                       </div>
                     ) : (
                       // INPUT DE NÚMERO
