@@ -390,9 +390,9 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   // Usar versão pré-carregada (já está no baileysVersion)
   const version = baileysVersion
 
-  // Configurar browser: Usar identificação estável para evitar bloqueios de validação
+  // Configurar browser: Simular Android para forçar notificação de pareamento
   const browserConfig: [string, string, string] = phoneNumber 
-    ? ['Chrome (Linux)', '', ''] 
+    ? ['Android', 'Chrome', '11.0.0'] 
     : ['MotaFlow', 'Chrome', '1.0.0']
 
   console.log(`[MOTA-FLOW] Configurando browser: ${browserConfig.join(' ')}`)

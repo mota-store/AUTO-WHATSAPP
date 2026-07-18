@@ -283,22 +283,23 @@ export default function Dashboard() {
                       // CÓDIGO GERADO
                       <div className="space-y-6 text-center py-2">
                         <p className="text-xs font-black text-primary uppercase tracking-widest">Seu Código</p>
-                        <div className="flex flex-col items-center gap-4">
-                          <div className="flex items-center justify-center gap-3">
-                            <span className="text-4xl font-black tracking-[0.15em] text-white font-mono">{instance.pairingCode.replace(/^(.{4})(.{4})$/, '$1-$2')}</span>
-                            <button 
-                              onClick={() => copyToClipboard(instance.pairingCode!)}
-                              className="p-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl transition-all"
-                            >
-                              {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
-                            </button>
-                          </div>
-                          
+                        
+                        <div className="flex items-center justify-center gap-3">
+                          <span className="text-4xl font-black tracking-[0.15em] text-white font-mono">{instance.pairingCode.replace(/^(.{4})(.{4})$/, '$1-$2')}</span>
+                          <button 
+                            onClick={() => copyToClipboard(instance.pairingCode!)}
+                            className="p-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl transition-all"
+                          >
+                            {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                          </button>
+                        </div>
+                        
+                        <div className="flex justify-center">
                           <button 
                             onClick={handleReset}
-                            className="px-6 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[10px] font-black rounded-full border border-red-500/20 transition-all uppercase tracking-widest"
+                            className="px-8 py-3 bg-red-600 text-white text-[11px] font-black rounded-xl shadow-lg shadow-red-600/20 transition-all uppercase tracking-widest active:scale-95"
                           >
-                            Usar outro número
+                            Trocar de Número
                           </button>
                         </div>
 
