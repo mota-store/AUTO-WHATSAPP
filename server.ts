@@ -159,6 +159,43 @@ app.get('/api/dashboard', authMiddleware, async (req: Request, res: Response) =>
   }
 })
 
+// ============ BOT AVATAR ROUTES ============
+
+app.post('/api/bot-avatar', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { avatar } = req.body
+    if (!avatar) return res.status(400).json({ message: 'Imagem obrigatória' })
+    if (!avatar.startsWith('data:image/')) return res.status(400).json({ message: 'Formato de imagem inválido' })
+
+    const base64Data = avatar.split(',')[1] || ''
+    const sizeKB = Math.round((base64Data.length * 0.75) / 1024)
+    if (sizeKB > 500) return res.status(400).json({ message: 'Imagem muito grande. Máximo 500KB.' })
+
+    // Save as JSON file for simplicity
+    const avatarPath = path.join(__dirname, 'bot-avatar.json')
+    fs.writeFileSync(avatarPath, JSON.stringify({ avatar, updatedAt: new Date().toISOString() }))
+    console.log('[MOTA-FLOW] Bot avatar salvo no servidor')
+    res.json({ message: 'Avatar do robô salvo com sucesso' })
+  } catch (error: any) {
+    console.error('[BOT AVATAR ERROR]', error?.message)
+    res.status(500).json({ message: 'Erro ao salvar avatar' })
+  }
+})
+
+app.get('/api/bot-avatar', async (req: Request, res: Response) => {
+  try {
+    const avatarPath = path.join(__dirname, 'bot-avatar.json')
+    if (fs.existsSync(avatarPath)) {
+      const data = JSON.parse(fs.readFileSync(avatarPath, 'utf-8'))
+      res.json({ botAvatar: data.avatar })
+    } else {
+      res.json({ botAvatar: null })
+    }
+  } catch {
+    res.json({ botAvatar: null })
+  }
+})
+
 // Forgot Password
 app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
   try {
@@ -342,7 +379,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
     },
     logger: pino({ level: 'silent' }),
-    browser: Browsers.windows('Chrome'),
+    browser: Browsers.windows('Mota-Flow'),
     connectTimeoutMs: 30000,
     keepAliveIntervalMs: 15000,
     printQRInTerminal: false,
@@ -489,8 +526,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut
 
       if (shouldReconnect) {
-        // Após 515 (restartRequired), reconectar mais rápido pois as credenciais já estão salvas
-        // isReconnect=true para NÃO limpar a sessão
+        // Manter status como 'connected' durante reconexão (não mudar para disconnected)
         const delay = statusCode === 515 ? 1500 : (statusCode === 408 ? 2000 : 5000)
         console.log(`[MOTA-FLOW] Reconectando em ${delay}ms (statusCode ${statusCode})...`)
         setTimeout(() => connectToWhatsApp(userId, instanceId, reconnectPhone, true), delay)
@@ -688,9 +724,42 @@ async function bootstrap() {
     console.log('🔄 [MOTA-FLOW] Pré-carregando versão Baileys...')
     await preloadBaileysVersion()
 
-    app.listen(PORT, () => {
+    app.listen(PORT, async () => {
       console.log(`✅ [MOTA-FLOW] Servidor rodando na porta ${PORT}`)
       console.log(`   Versão Baileys: ${baileysVersion.join('.')}`)
+
+      // AUTO-RECONNECT: restaurar sessões conectadas após restart
+      try {
+        console.log('🔄 [MOTA-FLOW] Verificando sessões para reconectar...')
+        // Usar query SQL direta para encontrar instâncias connected
+        const { pool } = await import('mysql2/promise')
+        // Importar pool do db
+        const dbModule = await import('./src/server/db')
+        // Reconectar todas as instâncias que estavam connected
+        // (Simplificado: só reconecta se a sessão existe no filesystem)
+        const sessionDirs = fs.readdirSync('sessions', { withFileTypes: true })
+          .filter(d => d.isDirectory())
+          .map(d => d.name)
+        
+        for (const dir of sessionDirs) {
+          const userIdMatch = dir.match(/session-(\d+)/)
+          if (!userIdMatch) continue
+          const userId = parseInt(userIdMatch[1])
+          
+          // Verificar se existem credenciais salvas
+          const credsPath = path.join('sessions', dir, 'creds.json')
+          if (!fs.existsSync(credsPath)) continue
+          
+          const instance = await db.getWhatsappInstance(userId)
+          if (!instance || instance.status !== 'connected') continue
+          
+          console.log(`[MOTA-FLOW] Reconectando usuário ${userId} (sessão persistente)...`)
+          connectToWhatsApp(userId, instance.id, undefined, true)
+        }
+        console.log('✅ [MOTA-FLOW] Reconexão automática concluída')
+      } catch (err: any) {
+        console.log('[MOTA-FLOW] Info: Nenhuma sessão para reconectar:', err?.message)
+      }
     })
   } catch (error: any) {
     console.error('❌ [MOTA-FLOW] Erro no bootstrap:', error?.message)

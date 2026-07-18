@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { 
@@ -39,6 +39,11 @@ interface MenuFlowData {
   menus: Record<string, MenuNode>
 }
 
+interface ChatMessage {
+  type: 'user' | 'bot'
+  text: string
+}
+
 export default function FlowEditor() {
   const { flowId } = useParams()
   const navigate = useNavigate()
@@ -62,12 +67,49 @@ export default function FlowEditor() {
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(!!flowId)
   const [previewMode, setPreviewMode] = useState(false)
+  const [botAvatar, setBotAvatar] = useState<string>('')
+
+  // Preview chat state
+  const [previewCurrentMenuId, setPreviewCurrentMenuId] = useState<string>('')
+  const [previewMessages, setPreviewMessages] = useState<ChatMessage[]>([])
+  const [previewInput, setPreviewInput] = useState('')
+  const chatEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (flowId) {
       loadFlow()
     }
+    loadBotAvatar()
   }, [flowId])
+
+  // Scroll to bottom when new messages arrive
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [previewMessages])
+
+  // Initialize preview chat when entering preview mode
+  useEffect(() => {
+    if (previewMode && flowData.rootMenuId) {
+      const rootMenu = flowData.menus[flowData.rootMenuId]
+      if (rootMenu) {
+        setPreviewCurrentMenuId(flowData.rootMenuId)
+        setPreviewMessages([{ type: 'bot', text: rootMenu.message }])
+      }
+    }
+  }, [previewMode])
+
+  const loadBotAvatar = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/bot-avatar', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.botAvatar) setBotAvatar(data.botAvatar)
+      }
+    } catch {}
+  }
 
   const loadFlow = async () => {
     try {
@@ -130,8 +172,6 @@ export default function FlowEditor() {
     }
   }
 
-  const selectedMenu = flowData.menus[selectedMenuId]
-
   const createNextStep = (optionId: string) => {
     const optionIndex = selectedMenu.options.findIndex(o => o.id === optionId)
     if (optionIndex === -1) return
@@ -141,7 +181,7 @@ export default function FlowEditor() {
     
     newMenus[newMenuId] = {
       id: newMenuId,
-      title: `Após: "${selectedMenu.options[optionIndex].text}"`,
+      title: `${selectedMenu.options[optionIndex].text}`,
       message: 'O que o robô deve dizer agora?',
       options: [
         { id: `opt_back_${Date.now()}`, number: 0, text: 'Voltar ao início', nextMenuId: flowData.rootMenuId }
@@ -153,8 +193,79 @@ export default function FlowEditor() {
 
     setFlowData({ ...flowData, menus: newMenus })
     setSelectedMenuId(newMenuId)
-    toast.success('Novo passo criado!')
+    toast.success('Nova resposta criada!')
   }
+
+  // Preview: handle option click
+  const handlePreviewOptionClick = (option: MenuOption) => {
+    if (!flowData) return
+
+    const currentMenu = flowData.menus[previewCurrentMenuId]
+    if (!currentMenu) return
+
+    // Add user message
+    const newMessages: ChatMessage[] = [...previewMessages, { type: 'user', text: option.number.toString() }]
+    
+    // Add bot response
+    if (option.response) {
+      newMessages.push({ type: 'bot', text: option.response })
+    }
+
+    // Navigate to next menu if exists
+    if (option.nextMenuId && flowData.menus[option.nextMenuId]) {
+      const nextMenu = flowData.menus[option.nextMenuId]
+      newMessages.push({ type: 'bot', text: nextMenu.message })
+      setPreviewCurrentMenuId(option.nextMenuId)
+    } else if (option.response) {
+      // No next menu, just show the response
+    }
+
+    setPreviewMessages(newMessages)
+  }
+
+  // Preview: handle text input
+  const handlePreviewSend = () => {
+    if (!previewInput.trim() || !flowData) return
+
+    const trimmed = previewInput.trim().toLowerCase()
+    const currentMenu = flowData.menus[previewCurrentMenuId]
+    if (!currentMenu) {
+      setPreviewInput('')
+      return
+    }
+
+    // Try match by number
+    const numMatch = currentMenu.options.find(opt => opt.number.toString() === trimmed)
+    if (numMatch) {
+      handlePreviewOptionClick(numMatch)
+      setPreviewInput('')
+      return
+    }
+
+    // Try match by text (partial)
+    const textMatch = currentMenu.options.find(opt => 
+      opt.text.toLowerCase().includes(trimmed) || trimmed.includes(opt.text.toLowerCase())
+    )
+    if (textMatch) {
+      handlePreviewOptionClick(textMatch)
+      setPreviewInput('')
+      return
+    }
+
+    // No match: user message is sent but bot ignores (no response)
+    setPreviewMessages(prev => [...prev, { type: 'user', text: previewInput.trim() }])
+    setPreviewInput('')
+  }
+
+  const handlePreviewReset = () => {
+    const rootMenu = flowData.menus[flowData.rootMenuId]
+    if (!rootMenu) return
+    setPreviewCurrentMenuId(flowData.rootMenuId)
+    setPreviewMessages([{ type: 'bot', text: rootMenu.message }])
+    setPreviewInput('')
+  }
+
+  const selectedMenu = flowData.menus[selectedMenuId]
 
   if (isLoading) {
     return (
@@ -170,7 +281,7 @@ export default function FlowEditor() {
       
       <main className="flex-1 lg:ml-72 p-4 lg:p-8 transition-all duration-500">
         <div className="max-w-6xl mx-auto space-y-6">
-          {/* Top Header - Simples */}
+          {/* Top Header */}
           <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-[2rem] border border-border/50 shadow-sm">
             <div className="flex items-center gap-4">
               <button onClick={() => navigate('/flows')} className="p-3 hover:bg-muted rounded-2xl transition-all">
@@ -231,7 +342,7 @@ export default function FlowEditor() {
                       }`}
                     >
                       <div className="flex justify-between items-center">
-                        <span className="truncate text-sm">{menu.title}</span>
+                        <span className="truncate text-sm">{menu.id === flowData.rootMenuId ? 'Menu Principal' : `Resposta: ${menu.title}`}</span>
                         {menu.id === flowData.rootMenuId && <span className="text-[8px] bg-primary text-white px-2 py-0.5 rounded-full">INÍCIO</span>}
                       </div>
                     </button>
@@ -243,36 +354,72 @@ export default function FlowEditor() {
             {/* Right Side - Editor Visual */}
             <div className={`${previewMode ? 'lg:col-span-12' : 'lg:col-span-8'}`}>
               {previewMode ? (
-                /* Preview Realista Estilo WhatsApp */
+                /* Preview Realista Estilo WhatsApp - FUNCIONAL */
                 <div className="flex justify-center py-8 bg-muted/20 rounded-[3rem] border-2 border-dashed border-border">
                   <div className="w-full max-w-[360px] bg-[#E5DDD5] rounded-[3rem] border-[12px] border-black shadow-2xl overflow-hidden flex flex-col h-[600px]">
+                    {/* Header */}
                     <div className="bg-[#075E54] p-4 flex items-center gap-3">
-                      <img src="/bot-avatar.png" alt="Bot" className="w-10 h-10 rounded-full object-cover" />
+                      {botAvatar ? (
+                        <img src={botAvatar} alt="Bot" className="w-10 h-10 rounded-full object-cover" />
+                      ) : (
+                        <img src="/bot-avatar.png" alt="Bot" className="w-10 h-10 rounded-full object-cover" />
+                      )}
                       <div>
                         <p className="text-white font-black text-sm">MOTA-FLOW (Robô)</p>
                         <p className="text-white/70 text-[10px]">Online</p>
                       </div>
                     </div>
-                    <div className="flex-1 p-4 space-y-4 overflow-y-auto">
-                      <div className="bg-white p-3 rounded-2xl rounded-tl-none shadow-sm max-w-[85%]">
-                        <p className="text-sm whitespace-pre-wrap text-black">{selectedMenu.message}</p>
-                        <div className="mt-3 space-y-1">
-                          {selectedMenu.options.map(opt => (
-                            <p key={opt.id} className="text-xs font-bold text-[#128C7E]">{opt.number}. {opt.text}</p>
-                          ))}
+
+                    {/* Chat Messages */}
+                    <div className="flex-1 p-4 space-y-3 overflow-y-auto">
+                      {previewMessages.map((msg, idx) => (
+                        <div key={idx} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                          <div
+                            className={`px-3 py-2 rounded-lg shadow-sm max-w-[85%] ${
+                              msg.type === 'user' 
+                                ? 'bg-[#DCF8C6] text-black' 
+                                : 'bg-white text-black'
+                            }`}
+                            style={msg.type === 'user' ? { borderTopRightRadius: '4px' } : { borderTopLeftRadius: '4px' }}
+                          >
+                            <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+                          </div>
                         </div>
-                        <p className="text-[9px] text-gray-400 text-right mt-1">12:00</p>
-                      </div>
+                      ))}
+                      <div ref={chatEndRef} />
                     </div>
-                    <div className="bg-[#F0F0F0] p-3 flex gap-2">
+
+                    {/* Options (clickable buttons) */}
+                    {flowData.menus[previewCurrentMenuId]?.options.length > 0 && (
+                      <div className="border-t border-gray-300/50 p-3 space-y-2 max-h-[150px] overflow-y-auto">
+                        {flowData.menus[previewCurrentMenuId].options.map(opt => (
+                          <button
+                            key={opt.id}
+                            onClick={() => handlePreviewOptionClick(opt)}
+                            className="w-full text-left px-3 py-2 bg-white/80 hover:bg-white rounded-lg transition text-sm font-bold text-[#128C7E]"
+                          >
+                            {opt.number}. {opt.text}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Input funcional */}
+                    <div className="bg-[#F0F0F0] p-3 flex gap-2 items-center">
                       <input 
                         type="text" 
                         placeholder="Digite uma mensagem"
-                        className="flex-1 bg-white rounded-full px-4 py-2 text-xs text-black outline-none"
+                        value={previewInput}
+                        onChange={(e) => setPreviewInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handlePreviewSend()}
+                        className="flex-1 bg-white rounded-full px-4 py-2 text-sm text-black outline-none border-none"
                       />
-                      <div className="w-10 h-10 bg-[#128C7E] rounded-full flex items-center justify-center text-white">
+                      <button 
+                        onClick={handlePreviewSend}
+                        className="w-10 h-10 bg-[#128C7E] rounded-full flex items-center justify-center text-white shrink-0"
+                      >
                         <Send className="w-5 h-5" />
-                      </div>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -373,6 +520,16 @@ export default function FlowEditor() {
                         ))}
                       </div>
                     </div>
+                  </div>
+
+                  {/* Reset Preview Button */}
+                  <div className="flex justify-center pt-4">
+                    <button
+                      onClick={handlePreviewReset}
+                      className="px-6 py-3 bg-muted text-muted-foreground rounded-2xl font-black text-sm flex items-center gap-2 hover:bg-primary hover:text-white transition-all"
+                    >
+                      <RefreshCw className="w-4 h-4" /> Reiniciar Preview
+                    </button>
                   </div>
                 </div>
               )}
