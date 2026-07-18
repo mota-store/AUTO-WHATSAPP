@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { 
   Zap, 
@@ -35,6 +35,8 @@ export default function Dashboard() {
   const [phoneNumber, setPhoneNumber] = useState('')
   const [isConnecting, setIsConnecting] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [showPairingLoading, setShowPairingLoading] = useState(false)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     loadDashboard()
@@ -59,15 +61,33 @@ export default function Dashboard() {
     }
   }
 
+  // Start fast polling when modal is open (every 2s instead of 5s)
+  const startFastPolling = () => {
+    if (pollRef.current) clearInterval(pollRef.current)
+    pollRef.current = setInterval(loadDashboard, 2000)
+  }
+
+  const stopFastPolling = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+  }
+
   const handleConnect = async (usePairing = false) => {
     if (usePairing && !phoneNumber) {
       toast.error('Digite o número do WhatsApp')
       return
     }
     setIsConnecting(true)
+
+    if (usePairing) {
+      setShowPairingLoading(true)
+    }
+
     try {
       const token = localStorage.getItem('token')
-      await fetch('/api/whatsapp/connect', {
+      const response = await fetch('/api/whatsapp/connect', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -78,13 +98,45 @@ export default function Dashboard() {
           usePairingCode: usePairing 
         }),
       })
-      if (usePairing) setConnectMethod('pairing')
+
+      if (!response.ok) {
+        const data = await response.json()
+        toast.error(data.message || 'Erro ao conectar')
+        if (usePairing) setShowPairingLoading(false)
+        return
+      }
+
+      // Conectou com sucesso, iniciar polling rápido
+      startFastPolling()
+
+      if (usePairing) {
+        // Para pairing, esperar um pouco e fazer refresh para pegar o código
+        setTimeout(() => {
+          loadDashboard()
+        }, 3000)
+        // Se após 15s não tiver código, mostrar erro
+        setTimeout(() => {
+          if (usePairing && !instance?.pairingCode) {
+            loadDashboard() // última tentativa
+            // Check via state if still no code
+          }
+        }, 15000)
+      }
     } catch (error) {
-      toast.error('Erro ao conectar')
+      toast.error('Erro de conexão')
+      if (usePairing) setShowPairingLoading(false)
     } finally {
       setIsConnecting(false)
     }
   }
+
+  // Stop fast polling when modal closes
+  useEffect(() => {
+    if (!showConnectModal) {
+      stopFastPolling()
+      setShowPairingLoading(false)
+    }
+  }, [showConnectModal])
 
   const handleDisconnect = async () => {
     if (!instance) return
@@ -125,7 +177,7 @@ export default function Dashboard() {
     <div className="min-h-screen bg-[#0a0a0a] text-zinc-100 flex font-sans selection:bg-primary/30 safe-top safe-bottom">
       <Sidebar />
       
-      {/* Modal de Conexão - Mobile otimizado */}
+      {/* Modal de Conexão */}
       {showConnectModal && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4 animate-in fade-in duration-300">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowConnectModal(false)}></div>
@@ -146,13 +198,13 @@ export default function Dashboard() {
 
               <div className="flex p-1 bg-black/40 rounded-xl border border-zinc-800/50">
                 <button 
-                  onClick={() => setConnectMethod('qr')}
+                  onClick={() => { setConnectMethod('qr'); setShowPairingLoading(false); }}
                   className={`flex-1 py-3 rounded-lg text-xs font-black transition-all ${connectMethod === 'qr' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500'}`}
                 >
                   QR CODE
                 </button>
                 <button 
-                  onClick={() => setConnectMethod('pairing')}
+                  onClick={() => { setConnectMethod('pairing'); setShowPairingLoading(false); }}
                   className={`flex-1 py-3 rounded-lg text-xs font-black transition-all ${connectMethod === 'pairing' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500'}`}
                 >
                   NÚMERO
@@ -167,14 +219,9 @@ export default function Dashboard() {
                         <img src={instance.qrCode} alt="QR Code" className="w-full h-full object-contain" />
                       ) : (
                         <div className="w-full h-full flex flex-col items-center justify-center gap-3">
-                          <RefreshCw className="w-8 h-8 text-zinc-300 animate-spin" />
-                          <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Gerando...</p>
-                          <button 
-                            onClick={() => handleConnect(false)}
-                            className="text-[10px] font-black text-primary uppercase tracking-widest"
-                          >
-                            Tentar novamente
-                          </button>
+                          <RefreshCw className="w-8 h-8 text-primary animate-spin" />
+                          <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Gerando QR...</p>
+                          <p className="text-[9px] text-zinc-500">Aguarde alguns segundos</p>
                         </div>
                       )}
                     </div>
@@ -188,7 +235,22 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    {instance?.pairingCode ? (
+                    {showPairingLoading ? (
+                      // LOADING STATE - mostra spinner enquanto processa
+                      <div className="space-y-4 text-center py-4">
+                        <div className="w-16 h-16 mx-auto relative">
+                          <div className="w-16 h-16 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <Smartphone className="w-6 h-6 text-primary" />
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-sm font-black text-white">Gerando código...</p>
+                          <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Aguarde 5-15 segundos</p>
+                        </div>
+                      </div>
+                    ) : instance?.pairingCode ? (
+                      // CÓDIGO GERADO
                       <div className="space-y-6 text-center py-2">
                         <p className="text-xs font-black text-primary uppercase tracking-widest">Seu Código</p>
                         <div className="flex items-center justify-center gap-3">
@@ -200,8 +262,18 @@ export default function Dashboard() {
                             {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
                           </button>
                         </div>
+                        <div className="bg-black/30 p-4 rounded-xl border border-zinc-800/50 text-left space-y-2">
+                          <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Como usar:</p>
+                          <ol className="text-sm text-zinc-300 space-y-1.5 font-medium list-decimal list-inside">
+                            <li>Abra o WhatsApp</li>
+                            <li>Vá em Aparelhos Conectados</li>
+                            <li>Conectar com número</li>
+                            <li>Digite o código</li>
+                          </ol>
+                        </div>
                       </div>
                     ) : (
+                      // INPUT DE NÚMERO
                       <div className="space-y-4">
                         <div className="space-y-2">
                           <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Número do WhatsApp</label>
@@ -215,10 +287,10 @@ export default function Dashboard() {
                         </div>
                         <button 
                           onClick={() => handleConnect(true)}
-                          disabled={isConnecting}
-                          className="w-full py-4 bg-primary text-white rounded-xl font-black text-sm shadow-lg shadow-primary/20 hover:opacity-90 transition-all flex items-center justify-center gap-2 active:scale-95"
+                          disabled={isConnecting || !phoneNumber}
+                          className="w-full py-4 bg-primary text-white rounded-xl font-black text-sm shadow-lg shadow-primary/20 hover:opacity-90 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
                         >
-                          {isConnecting ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
+                          <Zap className="w-5 h-5" />
                           Gerar Código
                         </button>
                       </div>
@@ -305,7 +377,7 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <h3 className="text-lg font-black">Vincular Dispositivo</h3>
-                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Escolha o método</p>
+                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Aguardando...</p>
                   </div>
                 </div>
 
@@ -332,8 +404,8 @@ export default function Dashboard() {
                           <img src={instance.qrCode} alt="QR Code" className="w-full h-full object-contain" />
                         ) : (
                           <div className="w-full h-full flex flex-col items-center justify-center gap-3">
-                            <RefreshCw className="w-8 h-8 text-zinc-300 animate-spin" />
-                            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Gerando...</p>
+                            <RefreshCw className="w-8 h-8 text-primary animate-spin" />
+                            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Gerando QR...</p>
                           </div>
                         )}
                       </div>
@@ -365,11 +437,17 @@ export default function Dashboard() {
                             </ol>
                           </div>
                         </div>
+                      ) : showPairingLoading ? (
+                        <div className="text-center py-6 space-y-3">
+                          <RefreshCw className="w-8 h-8 text-primary animate-spin mx-auto" />
+                          <p className="text-sm font-black text-white">Gerando código...</p>
+                          <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Aguarde 5-15 segundos</p>
+                        </div>
                       ) : (
                         <div className="space-y-3">
                           <input 
                             type="tel" 
-                            placeholder="Ex: 5591988887777"
+                            placeholder="Ex: 55919888887777"
                             value={phoneNumber}
                             onChange={(e) => setPhoneNumber(e.target.value)}
                             className="w-full px-5 py-4 bg-black/40 border border-zinc-800 rounded-xl font-bold focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-base"
@@ -377,7 +455,7 @@ export default function Dashboard() {
                           <button 
                             onClick={() => handleConnect(true)}
                             disabled={isConnecting}
-                            className="w-full py-4 bg-primary text-white rounded-xl font-black text-sm shadow-lg shadow-primary/20 hover:opacity-90 transition-all flex items-center justify-center gap-2 active:scale-95"
+                            className="w-full py-4 bg-primary text-white rounded-xl font-black text-sm shadow-lg shadow-primary/20 hover:opacity-90 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
                           >
                             {isConnecting ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
                             Gerar Código

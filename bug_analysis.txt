@@ -1,0 +1,33 @@
+ANÁLISE DO BUG - 18/07/2026
+
+PROBLEMA 1 - QR Code:
+- handleConnect(false) chama /api/whatsapp/connect
+- O backend responde imediatamente com { message: 'Conexão iniciada' }
+- O frontend NÃO faz polling após isso - depende do setInterval de 5s do loadDashboard
+- Mas loadDashboard JÁ roda a cada 5s, então DEVERIA pegar o QR
+- PROBLEMA REAL: Na primeira tentativa, o backend usa fetchLatestBaileysVersion() que é LENTO
+  - Mesmo com cache, na PRIMEIRA chamada após deploy o cache está vazio
+  - O connectToWhatsApp é fire-and-forget, então o endpoint responde rápido
+  - MAS o Baileys precisa do version antes de começar a conectar
+  - Se fetchLatestBaileysVersion demora 30-60s, o QR só aparece depois
+  - Na segunda tentativa (Tentar novamente), o cache já está populado → funciona
+
+PROBLEMA 2 - Pairing Code não faz nada:
+- handleConnect(true) chama /api/whatsapp/connect com usePairingCode=true
+- setIsConnecting(true) é chamado
+- O fetch executa
+- finally: setIsConnecting(false) → loading some
+- DEPOIS: setConnectMethod('pairing') muda o método para 'pairing'
+- MAS: o frontend agora mostra o input de número porque NÃO TEM pairingCode ainda
+- O usuário vê o input novamente (volta pro início) e não entende que está processando
+- O problema: quando o método é 'pairing' e não tem pairingCode, o frontend mostra
+  o input de número + botão "Gerar Código" — que é a mesma tela de ANTES
+- O usuário não percebe que algo está acontecendo
+
+SOLUÇÃO:
+1. Backend: Pré-carregar a versão Baileys no bootstrap (antes de aceitar conexões)
+2. Frontend: Após handleConnect, mostrar "Gerando QR..." ou "Gerando código..." imediatamente
+   independente do polling do dashboard
+3. Frontend: No modo pairing, após clicar "Gerar Código", esconder o input e mostrar
+   "Gerando código, aguarde..." com spinner
+4. Backend: Se fetchLatestBaileysVersion falhar, usar fallback imediatamente (não esperar)

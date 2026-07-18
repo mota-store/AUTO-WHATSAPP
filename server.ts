@@ -25,7 +25,7 @@ import QRCode from 'qrcode'
 
 const execAsync = promisify(exec)
 const sessions = new Map<number, any>()
-const pendingPairingNumbers = new Map<number, string>()  // userId -> phoneNumber
+const pendingPairingNumbers = new Map<number, string>()
 const messageStates = new Map<string, { flowId: number, menuId: string, userId: number, instanceId: number }>()
 const app = express()
 const PORT = process.env.PORT || 8080
@@ -39,22 +39,20 @@ console.log('🚀 [MOTA-FLOW] Iniciando servidor...')
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }))
 app.use(express.json({ limit: '10mb' }))
 
-// Cache for Baileys version to avoid repeated HTTPS calls
-let cachedBaileysVersion: [number, number, number] | null = null
+// Baileys version - PRE-LOADED on bootstrap
+let baileysVersion: [number, number, number] = [2, 2413, 1] // safe default
 
-async function getBaileysVersion(): Promise<[number, number, number]> {
-  if (cachedBaileysVersion) return cachedBaileysVersion
+async function preloadBaileysVersion() {
   try {
     const start = Date.now()
-    const { version } = await fetchLatestBaileysVersion()
-    cachedBaileysVersion = version
-    console.log(`[MOTA-FLOW] Versão Baileys carregada em ${Date.now() - start}ms:`, version.join('.'))
-    return version
+    const result = await Promise.race([
+      fetchLatestBaileysVersion(),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000))
+    ])
+    baileysVersion = (result as any).version
+    console.log(`✅ [MOTA-FLOW] Versão Baileys pré-carregada em ${Date.now() - start}ms: ${baileysVersion.join('.')}`)
   } catch (err) {
-    console.error('[MOTA-FLOW] Erro ao buscar versão Baileys, usando padrão:', err)
-    // Fallback: versão conhecida estável
-    cachedBaileysVersion = [2, 2413, 1]
-    return cachedBaileysVersion
+    console.log('⚠️ [MOTA-FLOW] Usando versão fallback Baileys:', baileysVersion.join('.'))
   }
 }
 
@@ -68,7 +66,8 @@ async function authMiddleware(req: Request, res: Response, next: NextFunction) {
   next()
 }
 
-// Routes
+// ============ AUTH ROUTES ============
+
 app.post('/api/auth/register', async (req: Request, res: Response) => {
   try {
     const { email, password, name } = req.body
@@ -123,20 +122,12 @@ app.post('/api/auth/update-avatar', authMiddleware, async (req: Request, res: Re
     const userPayload = (req as any).user as AuthPayload
     const { avatar } = req.body
     
-    if (!avatar) {
-      return res.status(400).json({ message: 'Imagem obrigatória' })
-    }
-
-    if (!avatar.startsWith('data:image/')) {
-      return res.status(400).json({ message: 'Formato de imagem inválido' })
-    }
+    if (!avatar) return res.status(400).json({ message: 'Imagem obrigatória' })
+    if (!avatar.startsWith('data:image/')) return res.status(400).json({ message: 'Formato de imagem inválido' })
 
     const base64Data = avatar.split(',')[1] || ''
     const sizeKB = Math.round((base64Data.length * 0.75) / 1024)
-    
-    if (sizeKB > 500) {
-      return res.status(400).json({ message: 'Imagem muito grande. Máximo 500KB.' })
-    }
+    if (sizeKB > 500) return res.status(400).json({ message: 'Imagem muito grande. Máximo 500KB.' })
 
     await db.updateUserAvatar(userPayload.userId, avatar)
     res.json({ message: 'Foto de perfil atualizada' })
@@ -190,7 +181,6 @@ app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
 
     setImmediate(async () => {
       try {
-        console.log('[EMAIL] Enviando e-mail para', targetEmail)
         const mailtrapToken = process.env.MAILTRAP_API_TOKEN || ''
         if (!mailtrapToken) {
           console.error('[EMAIL ERROR] MAILTRAP_API_TOKEN não configurada')
@@ -213,7 +203,7 @@ app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
                 <p>Você solicitou a redefinição de senha para sua conta MOTA-FLOW.</p>
                 <p>Clique no botão abaixo para redefinir sua senha:</p>
                 <a href="${resetUrl}" style="display: inline-block; background: #25D366; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">Redefinir Senha</a>
-                <p style="color: #666; font-size: 12px; margin-top: 24px;">Este link expira em 1 hora. Se você não solicitou isso, ignore este e-mail.</p>
+                <p style="color: #666; font-size: 12px; margin-top: 24px;">Este link expira em 1 hora.</p>
               </div>`,
             category: 'Password Reset',
           }),
@@ -226,7 +216,7 @@ app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
           console.error('[EMAIL ERROR] Mailtrap rejeitou:', JSON.stringify(data))
         }
       } catch (emailErr: any) {
-        console.error('[EMAIL ERROR] Falha ao enviar e-mail:', emailErr?.message)
+        console.error('[EMAIL ERROR]', emailErr?.message)
       }
     })
   } catch (error: any) {
@@ -235,7 +225,6 @@ app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
   }
 })
 
-// Reset Password - Com token
 app.post('/api/auth/reset-password', async (req: Request, res: Response) => {
   try {
     const { token, newPassword } = req.body
@@ -260,6 +249,8 @@ app.post('/api/auth/reset-password', async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Erro ao redefinir senha' })
   }
 })
+
+// ============ FLOWS ROUTES ============
 
 app.get('/api/flows', authMiddleware, async (req: Request, res: Response) => {
   try {
@@ -313,41 +304,38 @@ app.delete('/api/flows/:flowId', authMiddleware, async (req: Request, res: Respo
 // ============ WHATSAPP CORE LOGIC ============
 
 function cleanPhoneNumber(num: string): string {
-  // Remove everything except digits
   return num.replace(/\D/g, '')
 }
 
 async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber?: string) {
   const sessionPath = `sessions/session-${userId}`
 
-  console.log(`[MOTA-FLOW] Iniciando conexão para usuário ${userId}, método: ${phoneNumber ? 'Pairing Code' : 'QR Code'}`)
+  console.log(`[MOTA-FLOW] Conectando usuário ${userId}, método: ${phoneNumber ? 'Pairing Code' : 'QR Code'}`)
 
-  // Limpeza de sessão antiga sempre que iniciar nova conexão
+  // Limpeza de sessão antiga
   if (fs.existsSync(sessionPath)) {
     try {
       fs.rmSync(sessionPath, { recursive: true, force: true })
       console.log('[MOTA-FLOW] Sessão antiga removida')
     } catch (e) {
-      console.log('[MOTA-FLOW] Erro ao remover sessão antiga:', e)
+      console.log('[MOTA-FLOW] Erro ao remover sessão:', e)
     }
   }
 
-  // Criar diretório de sessão
   const sessionDir = path.dirname(sessionPath)
   if (!fs.existsSync(sessionDir)) {
     fs.mkdirSync(sessionDir, { recursive: true })
   }
 
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
-  console.log('[MOTA-FLOW] Auth state carregado, registered:', state.creds.registered)
+  console.log('[MOTA-FLOW] Auth state, registered:', state.creds.registered)
 
-  // Se já registrado, não precisa de QR/Pairing
   if (state.creds.registered) {
-    console.log('[MOTA-FLOW] Sessão já registrada, conectando diretamente...')
+    console.log('[MOTA-FLOW] Sessão já registrada, conectando direto...')
   }
 
-  // Get cached version instead of fetching every time
-  const version = await getBaileysVersion()
+  // Usar versão pré-carregada (já está no baileysVersion)
+  const version = baileysVersion
 
   const sock = makeWASocket({
     version,
@@ -357,7 +345,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     },
     logger: pino({ level: 'silent' }),
     browser: Browsers.ubuntu('Chrome'),
-    connectTimeoutMs: 60000,
+    connectTimeoutMs: 30000,
     keepAliveIntervalMs: 15000,
     printQRInTerminal: false,
     maxMsgRetryCount: 3,
@@ -366,48 +354,49 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   sessions.set(userId, sock)
   sock.ev.on('creds.update', saveCreds)
 
-  // Store pairing number if provided
+  // Armazenar número para pairing se fornecido
   if (phoneNumber) {
     const cleanNumber = cleanPhoneNumber(phoneNumber)
     pendingPairingNumbers.set(userId, cleanNumber)
-    console.log(`[MOTA-FLOW] Número para pairing armazenado: ${cleanNumber}`)
+    console.log(`[MOTA-FLOW] Número para pairing: ${cleanNumber}`)
   }
 
-  // CONNECTION UPDATE HANDLER - QR e Pairing Code dentro do evento
+  // HANDLER ÚNICO de connection.update
+  let pairingRequested = false  // garantir que só chama uma vez
+
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update
 
-    // QR CODE: emitido automaticamente quando não tem credenciais
+    // QR CODE: gerado automaticamente quando sem credenciais
     if (qr) {
-      console.log('[MOTA-FLOW] QR Code recebido do WhatsApp!')
+      console.log('[MOTA-FLOW] QR Code recebido!')
       try {
         const qrBase64 = await QRCode.toDataURL(qr, {
           width: 256,
           margin: 1,
           color: { dark: '#000000', light: '#FFFFFF' }
         })
-        console.log('[MOTA-FLOW] QR Code Base64 gerado com sucesso')
         await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: qrBase64, pairingCode: null })
+        console.log('[MOTA-FLOW] QR Code salvo no banco')
       } catch (err: any) {
-        console.error('[MOTA-FLOW] Erro ao gerar QR Base64:', err?.message, 'Usando fallback...')
+        console.error('[MOTA-FLOW] Erro QR Base64:', err?.message)
         const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qr)}`
         await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: qrUrl, pairingCode: null })
-        console.log('[MOTA-FLOW] QR Code gerado via API (Fallback).')
       }
     }
 
-    // PAIRING CODE: chamar requestPairingCode DENTRO do connection.update
-    // quando connection === "connecting" e não está registrado
-    if ((connection === 'connecting' || !!qr) && pendingPairingNumbers.has(userId) && !state.creds.registered) {
+    // PAIRING CODE: dentro do connection.update, quando connecting ou qr
+    if (!pairingRequested && pendingPairingNumbers.has(userId) && !state.creds.registered && (connection === 'connecting' || !!qr)) {
+      pairingRequested = true
       const number = pendingPairingNumbers.get(userId)!
-      pendingPairingNumbers.delete(userId)  // Remove para não chamar novamente
-      console.log(`[MOTA-FLOW] Solicitando Pairing Code para ${number}...`)
+      pendingPairingNumbers.delete(userId)
+      console.log(`[MOTA-FLOW] Solicitando Pairing Code para: ${number}`)
       try {
         const code = await sock.requestPairingCode(number)
-        console.log(`[MOTA-FLOW] Pairing Code gerado: ${code}`)
+        console.log(`[MOTA-FLOW] Pairing Code: ${code}`)
         await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
       } catch (err: any) {
-        console.error('[MOTA-FLOW] Erro ao solicitar Pairing Code:', err?.message, err?.stack)
+        console.error('[MOTA-FLOW] Erro Pairing Code:', err?.message, err?.stack)
         await db.updateWhatsappInstance(instanceId, { status: 'disconnected' })
       }
     }
@@ -458,10 +447,10 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
     const { phoneNumber, usePairingCode } = req.body
     console.log(`[WHATSAPP CONNECT] userId=${user.userId}, phoneNumber=${phoneNumber}, usePairingCode=${usePairingCode}`)
 
-    // Se já existe uma sessão ativa, logout antes
+    // Logout existente
     const existingSession = sessions.get(user.userId)
     if (existingSession) {
-      console.log('[WHATSAPP CONNECT] Existe sessão ativa, fazendo logout...')
+      console.log('[WHATSAPP CONNECT] Logout sessão ativa...')
       try { existingSession.logout() } catch (e) {}
       sessions.delete(user.userId)
     }
@@ -469,13 +458,10 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
     let instance = await db.getWhatsappInstance(user.userId)
     if (!instance) instance = await db.createWhatsappInstance(user.userId)
 
-    // Limpar qrCode e pairingCode antes de iniciar nova conexão
+    // Limpar dados antigos
     await db.updateWhatsappInstance(instance.id, { status: 'connecting', qrCode: null, pairingCode: null })
 
-    // Clean phone number if provided
     const cleanPhone = phoneNumber ? cleanPhoneNumber(phoneNumber) : undefined
-    
-    // Start connection (fire and forget)
     connectToWhatsApp(user.userId, instance.id, usePairingCode ? cleanPhone : undefined)
 
     res.json({ message: 'Conexão iniciada', instanceId: instance.id })
@@ -485,21 +471,19 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
   }
 })
 
-// Pairing Code endpoint (separado)
 app.post('/api/whatsapp/pairing-code', authMiddleware, async (req: Request, res: Response) => {
   try {
     const user = (req as any).user as AuthPayload
     const { phoneNumber } = req.body
     if (!phoneNumber) return res.status(400).json({ message: 'Número obrigatório' })
 
-    console.log(`[PAIRING CODE] Solicitando código para ${phoneNumber} (user ${user.userId})`)
+    console.log(`[PAIRING CODE] userId=${user.userId}, number=${phoneNumber}`)
 
     let instance = await db.getWhatsappInstance(user.userId)
     if (!instance) instance = await db.createWhatsappInstance(user.userId)
 
     await db.updateWhatsappInstance(instance.id, { status: 'connecting' })
 
-    // Start connection with pairing code approach
     const cleanPhone = cleanPhoneNumber(phoneNumber)
     connectToWhatsApp(user.userId, instance.id, cleanPhone)
 
@@ -570,30 +554,28 @@ function buildMenuMessage(menu: MenuNode): string {
   return msg.trim()
 }
 
-// ============ SERVE STATIC FILES ============
+// ============ SERVE STATIC ============
 
 const distPath = path.resolve(__dirname, 'dist', 'client')
-console.log(`📂 [SYSTEM] Tentando servir arquivos estáticos de: ${distPath}`)
+console.log(`📂 [SYSTEM] Serving from: ${distPath}`)
 
 if (fs.existsSync(path.resolve(__dirname, 'dist'))) {
-  console.log('📂 [DEBUG] Conteúdo de /dist:', fs.readdirSync(path.resolve(__dirname, 'dist')))
+  console.log('📂 [DEBUG] /dist:', fs.readdirSync(path.resolve(__dirname, 'dist')))
 }
 
 if (fs.existsSync(distPath)) {
-  console.log('✅ [SYSTEM] Pasta dist/client encontrada!')
+  console.log('✅ [SYSTEM] dist/client found')
   app.use(express.static(distPath))
-
   app.get('*', (req, res) => {
     if (!req.path.startsWith('/api')) {
       res.sendFile(path.join(distPath, 'index.html'))
     }
   })
 } else {
-  console.error('❌ [SYSTEM] Pasta dist/client NÃO encontrada no caminho:', distPath)
-
+  console.error('❌ [SYSTEM] dist/client NOT found:', distPath)
   const fallbackPath = path.resolve(__dirname, 'dist')
   if (fs.existsSync(path.join(fallbackPath, 'index.html'))) {
-    console.log('✅ [SYSTEM] Fallback: index.html encontrado na raiz da pasta dist!')
+    console.log('✅ [SYSTEM] Fallback: index.html in dist root')
     app.use(express.static(fallbackPath))
     app.get('*', (req, res) => {
       if (!req.path.startsWith('/api')) {
@@ -612,17 +594,26 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 
 async function bootstrap() {
   try {
-    console.log('🔄 [MOTA-FLOW] Sincronizando schema do banco de dados...')
+    console.log('🔄 [MOTA-FLOW] Sincronizando schema...')
     await db.syncSchema()
-    console.log('✅ [MOTA-FLOW] Schema sincronizado com sucesso')
-  } catch (error: any) {
-    console.error('❌ [MOTA-FLOW] Erro ao sincronizar schema:', error?.message)
-    console.error('Stack:', error?.stack)
-  }
+    console.log('✅ [MOTA-FLOW] Schema OK')
 
-  app.listen(PORT, () => {
-    console.log(`✅ [MOTA-FLOW] Servidor rodando na porta ${PORT}`)
-  })
+    // PRE-LOAD Baileys version before accepting connections
+    console.log('🔄 [MOTA-FLOW] Pré-carregando versão Baileys...')
+    await preloadBaileysVersion()
+
+    app.listen(PORT, () => {
+      console.log(`✅ [MOTA-FLOW] Servidor rodando na porta ${PORT}`)
+      console.log(`   Versão Baileys: ${baileysVersion.join('.')}`)
+    })
+  } catch (error: any) {
+    console.error('❌ [MOTA-FLOW] Erro no bootstrap:', error?.message)
+    console.error('Stack:', error?.stack)
+    // Start anyway so user can at least see the frontend
+    app.listen(PORT, () => {
+      console.log(`⚠️ [MOTA-FLOW] Servidor rodando (com erros) na porta ${PORT}`)
+    })
+  }
 }
 
 bootstrap()
