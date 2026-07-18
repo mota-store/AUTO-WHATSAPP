@@ -13,7 +13,9 @@ import {
   Eye,
   Settings,
   MousePointer2,
-  ChevronLeft
+  ChevronLeft,
+  RefreshCw,
+  Send
 } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
 
