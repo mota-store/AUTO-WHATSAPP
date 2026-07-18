@@ -1,55 +1,55 @@
 import {
-  int,
-  mysqlTable,
-  varchar,
+  integer,
+  sqliteTable,
   text,
   timestamp,
-  json,
-  boolean,
-  mysqlEnum,
-} from "drizzle-orm/mysql-core";
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 
-export const users = mysqlTable("users", {
-  id: int("id").autoincrement().primaryKey(),
-  email: varchar("email", { length: 255 }).notNull().unique(),
+export const users = sqliteTable("users", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
-  name: varchar("name", { length: 255 }).notNull(),
+  name: text("name").notNull(),
   avatar: text("avatar"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  createdAt: timestamp("created_at").default("CURRENT_TIMESTAMP").notNull(),
+  updatedAt: timestamp("updated_at").default("CURRENT_TIMESTAMP").notNull(),
+}, (users) => ({
+  emailIdx: uniqueIndex("email_idx").on(users.email),
+}));
 });
 
-export const whatsappInstances = mysqlTable("whatsapp_instances", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("user_id").notNull(),
-  phoneNumber: varchar("phone_number", { length: 20 }),
-  status: mysqlEnum("status", ["disconnected", "connecting", "connected"]).default("disconnected").notNull(),
+export const whatsappInstances = sqliteTable("whatsapp_instances", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull(),
+  phoneNumber: text("phone_number"),
+  status: text("status", { enum: ["disconnected", "connecting", "connected"] }).default("disconnected").notNull(),
   sessionData: text("session_data"),
   qrCode: text("qr_code"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  createdAt: timestamp("created_at").default("CURRENT_TIMESTAMP").notNull(),
+  updatedAt: timestamp("updated_at").default("CURRENT_TIMESTAMP").notNull(),
 });
 
-export const menuFlows = mysqlTable("menu_flows", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("user_id").notNull(),
-  name: varchar("name", { length: 255 }).notNull(),
+export const menuFlows = sqliteTable("menu_flows", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull(),
+  name: text("name").notNull(),
   description: text("description"),
   flowData: text("flow_data").$type<MenuFlowData>().notNull(),
-  isActive: boolean("is_active").default(true).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  isActive: integer("is_active", { mode: "boolean" }).default(true).notNull(),
+  createdAt: timestamp("created_at").default("CURRENT_TIMESTAMP").notNull(),
+  updatedAt: timestamp("updated_at").default("CURRENT_TIMESTAMP").notNull(),
 });
 
-export const messageLogs = mysqlTable("message_logs", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("user_id").notNull(),
-  instanceId: int("instance_id").notNull(),
-  senderPhone: varchar("sender_phone", { length: 20 }).notNull(),
+export const messageLogs = sqliteTable("message_logs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull(),
+  instanceId: integer("instance_id").notNull(),
+  senderPhone: text("sender_phone").notNull(),
   messageText: text("message_text").notNull(),
   responseText: text("response_text"),
-  flowId: int("flow_id"),
-  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  flowId: integer("flow_id"),
+  timestamp: timestamp("timestamp").default("CURRENT_TIMESTAMP").notNull(),
 });
 
 export type User = typeof users.$inferSelect;
