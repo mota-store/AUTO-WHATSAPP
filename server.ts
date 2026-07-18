@@ -350,6 +350,10 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   })
 
   sessions.set(userId, sock)
+  
+  // Guardar o número usado nesta sessão para reconexão
+  const reconnectPhone = phoneNumber
+  
   sock.ev.on('creds.update', async () => {
     console.log('[MOTA-FLOW] creds.update chamado - salvando credenciais...')
     try {
@@ -489,7 +493,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
         // isReconnect=true para NÃO limpar a sessão
         const delay = statusCode === 515 ? 1500 : (statusCode === 408 ? 2000 : 5000)
         console.log(`[MOTA-FLOW] Reconectando em ${delay}ms (statusCode ${statusCode})...`)
-        setTimeout(() => connectToWhatsApp(userId, instanceId, undefined, true), delay)
+        setTimeout(() => connectToWhatsApp(userId, instanceId, reconnectPhone, true), delay)
       } else {
         console.log(`[MOTA-FLOW] Desconectado definitivamente (statusCode ${statusCode}), não reconectar`)
         await db.updateWhatsappInstance(instanceId, { status: 'disconnected', phoneNumber: null, qrCode: null, pairingCode: null })
