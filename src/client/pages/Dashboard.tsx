@@ -295,13 +295,13 @@ export default function Dashboard() {
                     onClick={() => { setConnectMethod('qr'); setShowConnectModal(true); handleConnect(false); }}
                     className="w-full sm:w-auto px-10 py-5 bg-white text-black rounded-2xl font-black text-sm hover:bg-zinc-200 transition-all flex items-center justify-center gap-2"
                   >
-                    <Zap className="w-5 h-5" /> Começar Agora
+                    <Zap className="w-5 h-5" /> Conectar via QR Code
                   </button>
                   <button 
                     onClick={() => { setConnectMethod('pairing'); setShowConnectModal(true); }}
                     className="w-full sm:w-auto px-10 py-5 bg-zinc-800/50 text-white rounded-2xl font-black text-sm border border-zinc-700 hover:bg-zinc-800 transition-all flex items-center justify-center gap-2"
                   >
-                    <Settings className="w-5 h-5" /> Opções Avançadas
+                    <Smartphone className="w-5 h-5" /> Conectar via Número
                   </button>
                 </div>
               </div>
