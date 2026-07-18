@@ -171,6 +171,16 @@ export default function Dashboard() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  // Monitorar status da instância para fechar o modal
+  useEffect(() => {
+    if (instance?.status === 'connected' && showConnectModal) {
+      setShowConnectModal(false)
+      setShowPairingLoading(false)
+      stopFastPolling()
+      toast.success('WhatsApp conectado com sucesso!')
+    }
+  }, [instance?.status, showConnectModal])
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a]">
@@ -540,13 +550,3 @@ export default function Dashboard() {
     </div>
   )
 }
-
-  // Monitorar status da instância para fechar o modal
-  useEffect(() => {
-    if (instance?.status === 'connected' && showConnectModal) {
-      setShowConnectModal(false)
-      setShowPairingLoading(false)
-      stopFastPolling()
-      toast.success('WhatsApp conectado com sucesso!')
-    }
-  }, [instance?.status, showConnectModal])
