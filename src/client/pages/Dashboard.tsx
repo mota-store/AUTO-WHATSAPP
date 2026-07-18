@@ -248,12 +248,20 @@ export default function Dashboard() {
                         </div>
                       )}
                     </div>
-                    <button 
-                      onClick={() => { setShowConnectionScreen(true); setConnectionMethod('qr'); setConnectionActive(true); }} 
-                      className="w-full btn-primary py-5 text-lg font-black"
-                    >
-                      Ampliar QR Code
-                    </button>
+                    <div className="w-full flex flex-col gap-2">
+                      <button 
+                        onClick={() => { setShowConnectionScreen(true); setConnectionMethod('qr'); setConnectionActive(true); }} 
+                        className="w-full btn-primary py-5 text-lg font-black"
+                      >
+                        Ampliar QR Code
+                      </button>
+                      <button 
+                        onClick={() => handleConnect(false)} 
+                        className="w-full py-2 text-xs font-bold text-muted-foreground hover:text-primary transition-all flex items-center justify-center gap-1"
+                      >
+                        <RefreshCw className="w-3 h-3" /> Reiniciar Geração de QR
+                      </button>
+                    </div>
                   </div>
 
                   {/* Pairing Code Option */}
