@@ -14,7 +14,8 @@ import {
   Wifi,
   WifiOff,
   History,
-  Settings
+  Settings,
+  X
 } from 'lucide-react'
 import { toast } from 'sonner'
 import Sidebar from '../components/Sidebar'
@@ -127,6 +128,118 @@ export default function Dashboard() {
     <div className="min-h-screen bg-[#0a0a0a] text-zinc-100 flex font-sans selection:bg-primary/30">
       <Sidebar />
       
+      {/* Modal de Conexão Sofisticado */}
+      {showConnectModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-300">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowConnectModal(false)}></div>
+          
+          <div className="relative w-full max-w-2xl bg-zinc-900 border border-zinc-800 rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <button 
+              onClick={() => setShowConnectModal(false)}
+              className="absolute top-8 right-8 p-2 text-zinc-500 hover:text-white hover:bg-white/10 rounded-xl transition-all"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            <div className="p-10 md:p-16 space-y-10">
+              <div className="space-y-2">
+                <h2 className="text-3xl font-black tracking-tight">Vincular WhatsApp</h2>
+                <p className="text-zinc-500 font-medium">Escolha como deseja conectar sua conta</p>
+              </div>
+
+              <div className="flex p-1 bg-black/40 rounded-2xl border border-zinc-800/50">
+                <button 
+                  onClick={() => setConnectMethod('qr')}
+                  className={`flex-1 py-4 rounded-xl text-xs font-black transition-all ${connectMethod === 'qr' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
+                >
+                  QR CODE
+                </button>
+                <button 
+                  onClick={() => setConnectMethod('pairing')}
+                  className={`flex-1 py-4 rounded-xl text-xs font-black transition-all ${connectMethod === 'pairing' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
+                >
+                  NÚMERO DE TELEFONE
+                </button>
+              </div>
+
+              <div className="space-y-8">
+                {connectMethod === 'qr' ? (
+                  <div className="space-y-8 text-center">
+                    <div className="relative aspect-square max-w-[240px] mx-auto bg-white p-6 rounded-[2.5rem] shadow-2xl shadow-primary/10">
+                      {instance?.qrCode ? (
+                        <img src={instance.qrCode} alt="QR Code" className="w-full h-full object-contain" />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center gap-4">
+                          <RefreshCw className="w-10 h-10 text-zinc-200 animate-spin" />
+                          <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Gerando...</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-4">
+                      <p className="text-sm text-zinc-400 font-medium leading-relaxed">
+                        1. Abra o WhatsApp no seu celular<br/>
+                        2. Vá em <span className="text-white">Aparelhos Conectados</span><br/>
+                        3. Aponte a câmera para este código
+                      </p>
+                      <button 
+                        onClick={() => handleConnect(false)}
+                        className="text-xs font-black text-primary hover:text-primary/80 uppercase tracking-widest flex items-center justify-center gap-2 mx-auto"
+                      >
+                        <RefreshCw className="w-3 h-3" /> Reiniciar Geração
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-8">
+                    {instance?.pairingCode ? (
+                      <div className="space-y-8 text-center">
+                        <div className="space-y-2">
+                          <p className="text-xs font-black text-primary uppercase tracking-widest">Seu Código</p>
+                          <div className="flex items-center justify-center gap-4">
+                            <span className="text-5xl font-black tracking-[0.2em] text-white font-mono">{instance.pairingCode}</span>
+                            <button 
+                              onClick={() => copyToClipboard(instance.pairingCode!)}
+                              className="p-3 bg-zinc-800 hover:bg-zinc-700 rounded-2xl transition-all"
+                            >
+                              {copied ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <Copy className="w-5 h-5" />}
+                            </button>
+                          </div>
+                        </div>
+                        <p className="text-sm text-zinc-400 font-medium leading-relaxed">
+                          Digite este código no seu celular após selecionar <br/>
+                          <span className="text-white">"Conectar com número de telefone"</span>
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-6">
+                        <div className="space-y-2">
+                          <label className="text-xs font-black text-zinc-500 uppercase tracking-widest ml-1">Número do WhatsApp</label>
+                          <input 
+                            type="text" 
+                            placeholder="Ex: 5591988887777"
+                            value={phoneNumber}
+                            onChange={(e) => setPhoneNumber(e.target.value)}
+                            className="w-full px-6 py-5 bg-black/40 border border-zinc-800 rounded-2xl font-black focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none"
+                          />
+                        </div>
+                        <button 
+                          onClick={() => handleConnect(true)}
+                          disabled={isConnecting}
+                          className="w-full py-5 bg-primary text-white rounded-2xl font-black text-sm shadow-xl shadow-primary/20 hover:opacity-90 transition-all flex items-center justify-center gap-2"
+                        >
+                          {isConnecting ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
+                          Gerar Código de Acesso
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="flex-1 lg:ml-72 p-6 lg:p-12 transition-all duration-500 overflow-x-hidden">
         <div className="max-w-6xl mx-auto space-y-12">
           
