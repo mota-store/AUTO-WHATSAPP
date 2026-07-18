@@ -390,6 +390,13 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   // Usar versão pré-carregada (já está no baileysVersion)
   const version = baileysVersion
 
+  // Configurar browser: Windows/Chrome para Pairing Code, MotaFlow/Chrome para QR Code
+  const browserConfig: [string, string, string] = phoneNumber 
+    ? ['Windows', 'Google Chrome', '10.0.0'] 
+    : ['MotaFlow', 'Chrome', '1.0.0']
+
+  console.log(`[MOTA-FLOW] Configurando browser: ${browserConfig.join(' ')}`)
+
   const sock = makeWASocket({
     version,
     auth: {
@@ -397,7 +404,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
     },
     logger: pino({ level: 'silent' }),
-    browser: ['MotaFlow', 'Chrome', '1.0.0'],
+    browser: browserConfig,
     connectTimeoutMs: 30000,
     keepAliveIntervalMs: 15000,
     printQRInTerminal: false,
