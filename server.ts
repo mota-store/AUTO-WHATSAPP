@@ -96,6 +96,28 @@ app.post('/api/auth/update-password', authMiddleware, async (req: Request, res: 
   }
 })
 
+app.post('/api/auth/update-avatar', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userPayload = (req as any).user as AuthPayload
+    const { avatar } = req.body
+    await db.updateUserAvatar(userPayload.userId, avatar)
+    res.json({ message: 'Foto de perfil atualizada' })
+  } catch (error: any) {
+    res.status(500).json({ message: 'Erro ao atualizar foto' })
+  }
+})
+
+app.get('/api/auth/me', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userPayload = (req as any).user as AuthPayload
+    const user = await db.getUserById(userPayload.userId)
+    if (!user) return res.status(404).json({ message: 'Usuário não encontrado' })
+    res.json({ id: user.id, email: user.email, name: user.name, avatar: user.avatar })
+  } catch (error: any) {
+    res.status(500).json({ message: 'Erro ao buscar perfil' })
+  }
+})
+
 app.get('/api/dashboard', authMiddleware, async (req: Request, res: Response) => {
   try {
     const user = (req as any).user as AuthPayload

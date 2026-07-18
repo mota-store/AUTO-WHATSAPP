@@ -80,6 +80,14 @@ export async function updateUserPassword(id: number, passwordHash: string) {
     .where(eq(schema.users.id, id))
 }
 
+export async function updateUserAvatar(id: number, avatar: string) {
+  const database = await getDb()
+  await database
+    .update(schema.users)
+    .set({ avatar })
+    .where(eq(schema.users.id, id))
+}
+
 // WhatsApp Instance queries
 export async function createWhatsappInstance(userId: number) {
   const database = await getDb()
