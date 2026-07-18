@@ -1,5 +1,5 @@
-import { drizzle } from 'drizzle-orm/mysql2'
-import mysql from 'mysql2/promise'
+import { drizzle } from 'drizzle-orm/better-sqlite3'
+import Database from 'better-sqlite3'
 import * as schema from '../../drizzle/schema'
 import { eq } from 'drizzle-orm'
 
@@ -7,36 +7,16 @@ let db: ReturnType<typeof drizzle> | null = null
 
 export async function getDb() {
   if (!db) {
-    const databaseUrl = process.env.DATABASE_URL;
-    console.log('🔌 [DB] Tentando conectar via process.env.DATABASE_URL...');
-    
-    if (!databaseUrl) {
-      console.error('❌ [DB] DATABASE_URL não definida nas variáveis de ambiente');
-      throw new Error('Configuração de banco de dados ausente (DATABASE_URL)');
-    }
-
-    console.log('🔌 [DB] Conectando ao banco de dados remoto...');
-    
-    // Configuração robusta para o driver mysql2
-    const connectionConfig: any = {
-      uri: databaseUrl,
-      ssl: {
-        rejectUnauthorized: true
-      },
-      // Forçar o uso da URI para evitar fallbacks de localhost no driver
-      connectTimeout: 10000,
-    }
-
     try {
-      const connection = await mysql.createConnection(connectionConfig)
-      console.log('✅ [DB] Conexão MySQL estabelecida com sucesso');
-      db = drizzle(connection, { schema, mode: 'default' })
-      console.log('✅ [DB] Drizzle ORM inicializado');
+      const sqlite = new Database('sqlite.db');
+      db = drizzle(sqlite, { schema });
+      console.log('✅ [DB] Conexão SQLite estabelecida e Drizzle ORM inicializado');
     } catch (error: any) {
       console.error('❌ [DB] Falha crítica na conexão com o banco:', error.message);
       console.error('Stack:', error.stack);
       throw error;
     }
+    
   }
   return db
 }
