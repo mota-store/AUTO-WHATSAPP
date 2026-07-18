@@ -390,9 +390,9 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   // Usar versão pré-carregada (já está no baileysVersion)
   const version = baileysVersion
 
-  // Configurar browser: Windows/Chrome para Pairing Code, MotaFlow/Chrome para QR Code
+  // Configurar browser: Ubuntu/Chrome é a identificação mais estável para Pairing Code
   const browserConfig: [string, string, string] = phoneNumber 
-    ? ['Windows', 'Google Chrome', '10.0.0'] 
+    ? ['Ubuntu', 'Chrome', '20.0.04'] 
     : ['MotaFlow', 'Chrome', '1.0.0']
 
   console.log(`[MOTA-FLOW] Configurando browser: ${browserConfig.join(' ')}`)

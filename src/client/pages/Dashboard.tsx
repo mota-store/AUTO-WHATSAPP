@@ -220,7 +220,7 @@ export default function Dashboard() {
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4 animate-in fade-in duration-300">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowConnectModal(false)}></div>
           
-          <div className="relative w-full max-w-lg bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-[2rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300 max-h-[90vh] overflow-y-auto">
+            <div className="relative w-full max-w-lg bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-[2rem] sm:rounded-[2.5rem] shadow-2xl animate-in slide-in-from-bottom duration-300 max-h-[90vh] overflow-y-auto pb-10">
             <button 
               onClick={() => setShowConnectModal(false)}
               className="absolute top-4 right-4 p-2 text-zinc-500 hover:text-white hover:bg-white/10 rounded-xl transition-all z-10"
@@ -283,30 +283,46 @@ export default function Dashboard() {
                       // CÓDIGO GERADO
                       <div className="space-y-6 text-center py-2">
                         <p className="text-xs font-black text-primary uppercase tracking-widest">Seu Código</p>
-                        <div className="flex items-center justify-center gap-3">
-                          <span className="text-4xl font-black tracking-[0.15em] text-white font-mono">{instance.pairingCode.replace(/^(.{4})(.{4})$/, '$1-$2')}</span>
+                        <div className="flex flex-col items-center gap-4">
+                          <div className="flex items-center justify-center gap-3">
+                            <span className="text-4xl font-black tracking-[0.15em] text-white font-mono">{instance.pairingCode.replace(/^(.{4})(.{4})$/, '$1-$2')}</span>
+                            <button 
+                              onClick={() => copyToClipboard(instance.pairingCode!)}
+                              className="p-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl transition-all"
+                            >
+                              {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                            </button>
+                          </div>
+                          
                           <button 
-                            onClick={() => copyToClipboard(instance.pairingCode!)}
-                            className="p-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl transition-all"
+                            onClick={handleReset}
+                            className="px-6 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 text-[10px] font-black rounded-full border border-red-500/20 transition-all uppercase tracking-widest"
                           >
-                            {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                            Usar outro número
                           </button>
                         </div>
-                        <div className="bg-black/30 p-4 rounded-xl border border-zinc-800/50 text-left space-y-2">
-                          <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Como usar:</p>
-                          <ol className="text-sm text-zinc-300 space-y-1.5 font-medium list-decimal list-inside">
-                            <li>Abra o WhatsApp</li>
-                            <li>Vá em Aparelhos Conectados</li>
-                            <li>Conectar com número</li>
-                            <li>Digite o código</li>
+
+                        <div className="bg-black/30 p-5 rounded-2xl border border-zinc-800/50 text-left space-y-3">
+                          <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Passo a passo:</p>
+                          <ol className="text-sm text-zinc-300 space-y-2 font-medium">
+                            <li className="flex gap-2">
+                              <span className="text-primary font-black">1.</span>
+                              Abra o WhatsApp no seu celular
+                            </li>
+                            <li className="flex gap-2">
+                              <span className="text-primary font-black">2.</span>
+                              Toque em Configurações &gt; Aparelhos Conectados
+                            </li>
+                            <li className="flex gap-2">
+                              <span className="text-primary font-black">3.</span>
+                              Toque em Conectar um aparelho &gt; Conectar com número
+                            </li>
+                            <li className="flex gap-2">
+                              <span className="text-primary font-black">4.</span>
+                              Digite o código acima
+                            </li>
                           </ol>
                         </div>
-                        <button 
-                          onClick={handleReset}
-                          className="w-full py-3 text-xs font-black text-zinc-500 hover:text-white transition-all uppercase tracking-widest"
-                        >
-                          Usar outro número
-                        </button>
                       </div>
                     ) : (
                       // INPUT DE NÚMERO
