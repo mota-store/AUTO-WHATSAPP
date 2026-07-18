@@ -1,0 +1,16 @@
+PROBLEMA: O Railway está rodando `tsx server.ts` (dev mode) em vez de `node dist/server.js` (production build).
+
+O package.json tem:
+- "start": "NODE_ENV=production node dist/server.js" (CORRETO para production)
+
+Mas o Railway parece estar rodando tsx server.ts, que:
+1. Pode não ter o dist/ compilado
+2. Pode ter problemas de TypeScript no runtime
+3. SIGTERM indica que o processo foi morto - provavelmente crash ou timeout
+
+SOLUÇÃO: Criar um railway.toml ou Procfile para forçar o comando correto, ou verificar se o Railway está configurado para usar o script "start".
+
+O comando "build" faz: npm install && vite build && esbuild server.ts
+O "start" faz: NODE_ENV=production node dist/server.js
+
+Precisa garantir que o Railway rode build ANTES de start, e depois rode start (não tsx).

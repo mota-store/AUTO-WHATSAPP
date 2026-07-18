@@ -344,7 +344,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
     },
     logger: pino({ level: 'silent' }),
-    browser: Browsers.ubuntu('Chrome'),
+    browser: Browsers.chrome('MOTA-FLOW'),
     connectTimeoutMs: 30000,
     keepAliveIntervalMs: 15000,
     printQRInTerminal: false,
