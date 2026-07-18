@@ -59,14 +59,9 @@ export default function Dashboard() {
         }
         // Se conectou, fechar modal e parar loading
         if (data.instance?.status === 'connected') {
-          if (showConnectModal) {
-            setShowConnectModal(false)
-            toast.success('WhatsApp conectado com sucesso!')
-            stopFastPolling()
-          }
-          if (showPairingLoading) {
-            setShowPairingLoading(false)
-          }
+          setShowConnectModal(false)
+          setShowPairingLoading(false)
+          stopFastPolling()
         }
       }
     } catch (error) {
@@ -545,3 +540,13 @@ export default function Dashboard() {
     </div>
   )
 }
+
+  // Monitorar status da instância para fechar o modal
+  useEffect(() => {
+    if (instance?.status === 'connected' && showConnectModal) {
+      setShowConnectModal(false)
+      setShowPairingLoading(false)
+      stopFastPolling()
+      toast.success('WhatsApp conectado com sucesso!')
+    }
+  }, [instance?.status, showConnectModal])
