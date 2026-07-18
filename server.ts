@@ -329,8 +329,11 @@ function buildMenuMessage(menu: MenuNode): string {
 }
 
 // Servir arquivos estáticos do Frontend (React)
-const distPath = path.join(__dirname, 'dist')
+const distPath = path.resolve(__dirname, 'dist')
+console.log(`📂 [SYSTEM] Tentando servir arquivos estáticos de: ${distPath}`)
+
 if (fs.existsSync(distPath)) {
+  console.log('✅ [SYSTEM] Pasta dist encontrada!')
   app.use(express.static(distPath))
   
   // Fallback para SPA (Single Page Application)
@@ -339,6 +342,8 @@ if (fs.existsSync(distPath)) {
       res.sendFile(path.join(distPath, 'index.html'))
     }
   })
+} else {
+  console.error('❌ [SYSTEM] Pasta dist NÃO encontrada no caminho:', distPath)
 }
 
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
