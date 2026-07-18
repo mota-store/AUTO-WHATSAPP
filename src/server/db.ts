@@ -85,6 +85,32 @@ export async function updateUserAvatar(id: number, avatar: string) {
     .where(eq(schema.users.id, id))
 }
 
+export async function updateResetToken(userId: number, resetToken: string, resetTokenExpiry: Date) {
+  const database = await getDb()
+  await database
+    .update(schema.users)
+    .set({ resetToken, resetTokenExpiry })
+    .where(eq(schema.users.id, userId))
+}
+
+export async function getUserByResetToken(token: string) {
+  const database = await getDb()
+  const users = await database
+    .select()
+    .from(schema.users)
+    .where(eq(schema.users.resetToken, token))
+    .limit(1)
+  return users[0]
+}
+
+export async function clearResetToken(userId: number) {
+  const database = await getDb()
+  await database
+    .update(schema.users)
+    .set({ resetToken: null, resetTokenExpiry: null })
+    .where(eq(schema.users.id, userId))
+}
+
 // WhatsApp Instance queries
 export async function createWhatsappInstance(userId: number) {
   const database = await getDb()
@@ -92,7 +118,8 @@ export async function createWhatsappInstance(userId: number) {
     userId,
     status: 'disconnected',
   })
-  return result
+  // Buscar a instância criada para retornar com o id
+  return getWhatsappInstance(userId)
 }
 
 export async function getWhatsappInstance(userId: number) {
@@ -226,6 +253,8 @@ export async function syncSchema() {
         password_hash TEXT NOT NULL,
         name VARCHAR(255) NOT NULL,
         avatar TEXT,
+        reset_token TEXT,
+        reset_token_expiry TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
         UNIQUE INDEX email_idx (email)

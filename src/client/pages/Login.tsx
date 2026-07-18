@@ -4,12 +4,93 @@ import { toast } from 'sonner'
 import { Mail, Lock, Eye, EyeOff, Wifi, ArrowRight } from 'lucide-react'
 import ThemeToggle from '../components/ThemeToggle'
 
+// Modal inline de Forgot Password
+function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
+  const [email, setEmail] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [sent, setSent] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    try {
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const data = await response.json()
+      if (response.ok) {
+        setSent(true)
+      } else {
+        toast.error(data.message || 'Erro ao processar')
+      }
+    } catch (error) {
+      toast.error('Erro de conexão')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/90 backdrop-blur-xl" onClick={onClose}></div>
+      <div className="relative w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-[3rem] shadow-2xl p-10 animate-in zoom-in-95 duration-300">
+        <button onClick={onClose} className="absolute top-8 right-8 p-2 text-zinc-500 hover:text-white transition-all">
+          <EyeOff className="w-6 h-6" />
+        </button>
+        <div className="space-y-8">
+          <div className="space-y-2">
+            <h3 className="text-3xl font-black tracking-tighter">Redefinir Senha</h3>
+            <p className="text-zinc-500 font-medium">Digite seu e-mail para receber o link de redefinição.</p>
+          </div>
+
+          {sent ? (
+            <div className="text-center space-y-4 py-8">
+              <div className="w-20 h-20 bg-primary/10 rounded-3xl mx-auto flex items-center justify-center">
+                <Mail className="w-10 h-10 text-primary" />
+              </div>
+              <h4 className="text-xl font-black">E-mail Enviado!</h4>
+              <p className="text-zinc-500 font-medium">Verifique sua caixa de entrada e siga as instruções.</p>
+              <button onClick={onClose} className="px-8 py-4 bg-primary text-white rounded-2xl font-black hover:opacity-90 transition-all">
+                Fechar
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em] ml-1">E-mail</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-6 py-5 bg-zinc-900/50 border border-zinc-800 rounded-2xl font-black focus:border-primary transition-all outline-none"
+                  placeholder="seu@email.com"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-5 bg-primary text-white rounded-2xl font-black shadow-lg shadow-primary/20 hover:opacity-90 transition-all disabled:opacity-50"
+              >
+                {isLoading ? <div className="h-6 w-6 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto"></div> : 'Enviar Link de Redefinição'}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Login() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [showForgotModal, setShowForgotModal] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -80,7 +161,7 @@ export default function Login() {
             <div className="space-y-2">
               <div className="flex justify-between items-center ml-1 mb-1">
                 <label className="text-xs font-black text-muted-foreground uppercase tracking-widest">Senha</label>
-                <a href="#" className="text-[10px] font-black text-primary hover:underline uppercase tracking-tighter">Esqueceu a senha?</a>
+                <button type="button" onClick={() => setShowForgotModal(true)} className="text-[10px] font-black text-primary hover:underline uppercase tracking-tighter">Esqueceu a senha?</button>
               </div>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -134,6 +215,8 @@ export default function Login() {
           &copy; 2026 MOTA-FLOW &bull; PREMIUM AUTOMATION
         </p>
       </div>
+
+      {showForgotModal && <ForgotPasswordModal onClose={() => setShowForgotModal(false)} />}
     </div>
   )
 }

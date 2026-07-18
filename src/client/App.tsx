@@ -8,6 +8,7 @@ import FlowPreview from './pages/FlowPreview'
 import Flows from './pages/Flows'
 import Settings from './pages/Settings'
 import Pairing from './pages/Pairing'
+import ResetPassword from './pages/ResetPassword'
 import ProtectedRoute from './components/ProtectedRoute'
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
           <Route path="/flow-preview/:flowId" element={<ProtectedRoute><FlowPreview /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/pairing" element={<ProtectedRoute><Pairing /></ProtectedRoute>} />
+          <Route path="/reset-password/:token" element={<ResetPassword />} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </Router>

@@ -37,7 +37,7 @@ console.log('🚀 [MOTA-FLOW] Iniciando servidor...')
 
 // Middleware
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }))
-app.use(express.json())
+app.use(express.json({ limit: '10mb' }))
 
 // Auth middleware
 async function authMiddleware(req: Request, res: Response, next: NextFunction) {
@@ -129,6 +129,94 @@ app.get('/api/dashboard', authMiddleware, async (req: Request, res: Response) =>
     res.json({ instance, flows })
   } catch (error: any) {
     res.status(500).json({ message: 'Erro no dashboard' })
+  }
+})
+
+// Forgot Password - Solicitar reset
+app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body
+    if (!email) return res.status(400).json({ message: 'Email obrigatório' })
+
+    const user = await db.getUserByEmail(email)
+    if (!user) {
+      // Não revelar se o email existe ou não
+      return res.json({ message: 'Se o email existir, você receberá um link de redefinição' })
+    }
+
+    // Gerar token de reset
+    const resetToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+    const resetTokenExpiry = new Date(Date.now() + 3600000) // 1 hora
+
+    await db.updateResetToken(user.id, resetToken, resetTokenExpiry)
+
+    // Enviar e-mail via API externa (Brevo/Resend)
+    const resetUrl = `${process.env.APP_URL || 'https://auto-whatsapp-production-73d9.up.railway.app'}/reset-password/${resetToken}`
+
+    try {
+      const emailResponse = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: 'MOTA-FLOW <onboarding@resend.dev>',
+          to: [email],
+          subject: 'Redefinição de Senha - MOTA-FLOW',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h1 style="color: #25D366;">MOTA-FLOW</h1>
+              <h2>Redefinição de Senha</h2>
+              <p>Você solicitou a redefinição de senha para sua conta MOTA-FLOW.</p>
+              <p>Clique no botão abaixo para redefinir sua senha:</p>
+              <a href="${resetUrl}" style="display: inline-block; background: #25D366; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">Redefinir Senha</a>
+              <p style="color: #666; font-size: 12px; margin-top: 24px;">Este link expira em 1 hora. Se você não solicitou isso, ignore este e-mail.</p>
+            </div>
+          `,
+        }),
+      })
+
+      if (!emailResponse.ok) {
+        console.error('[EMAIL ERROR] Resend API:', await emailResponse.text())
+      } else {
+        console.log('[EMAIL OK] E-mail de reset enviado para', email)
+      }
+    } catch (emailErr: any) {
+      console.error('[EMAIL ERROR] Falha ao enviar e-mail:', emailErr?.message)
+    }
+
+    res.json({ message: 'Se o email existir, você receberá um link de redefinição' })
+  } catch (error: any) {
+    console.error('[FORGOT PASSWORD ERROR]', error?.message, error?.stack)
+    res.status(500).json({ message: 'Erro ao processar solicitação' })
+  }
+})
+
+// Reset Password - Com token
+app.post('/api/auth/reset-password', async (req: Request, res: Response) => {
+  try {
+    const { token, newPassword } = req.body
+    if (!token || !newPassword) return res.status(400).json({ message: 'Token e nova senha obrigatórios' })
+    if (newPassword.length < 6) return res.status(400).json({ message: 'A senha deve ter pelo menos 6 caracteres' })
+
+    const user = await db.getUserByResetToken(token)
+    if (!user) return res.status(400).json({ message: 'Token inválido ou expirado' })
+
+    // Verificar se o token expirou
+    if (user.resetTokenExpiry && new Date(user.resetTokenExpiry) < new Date()) {
+      await db.clearResetToken(user.id)
+      return res.status(400).json({ message: 'Token expirado. Solicite um novo.' })
+    }
+
+    const passwordHash = await hashPassword(newPassword)
+    await db.updateUserPassword(user.id, passwordHash)
+    await db.clearResetToken(user.id)
+
+    res.json({ message: 'Senha redefinida com sucesso' })
+  } catch (error: any) {
+    console.error('[RESET PASSWORD ERROR]', error?.message, error?.stack)
+    res.status(500).json({ message: 'Erro ao redefinir senha' })
   }
 })
 
@@ -322,6 +410,82 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
   } catch (error: any) {
     console.error('[WHATSAPP CONNECT ERROR]', error?.message, error?.stack)
     res.status(500).json({ message: 'Erro ao iniciar conexão', detail: error?.message })
+  }
+})
+
+// Pairing Code endpoint
+app.post('/api/whatsapp/pairing-code', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as AuthPayload
+    const { phoneNumber } = req.body
+    if (!phoneNumber) return res.status(400).json({ message: 'Número obrigatório' })
+
+    console.log(`[PAIRING CODE] Solicitando código para ${phoneNumber} (user ${user.userId})`)
+
+    let instance = await db.getWhatsappInstance(user.userId)
+    if (!instance) instance = await db.createWhatsappInstance(user.userId)
+
+    await db.updateWhatsappInstance(instance.id, { status: 'connecting' })
+
+    // Iniciar conexão com Baileys e gerar pairing code
+    const sessionPath = `sessions/session-${user.userId}`
+    const sessionDir = path.dirname(sessionPath)
+    if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir, { recursive: true })
+
+    // Limpar sessão anterior
+    if (fs.existsSync(sessionPath)) {
+      fs.rmSync(sessionPath, { recursive: true, force: true })
+    }
+
+    const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
+    const { version } = await fetchLatestBaileysVersion()
+
+    const sock = makeWASocket({
+      version,
+      auth: {
+        creds: state.creds,
+        keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
+      },
+      logger: pino({ level: 'silent' }),
+      browser: Browsers.ubuntu('Chrome'),
+      connectTimeoutMs: 120000,
+      keepAliveIntervalMs: 15000,
+      printQRInTerminal: false
+    })
+
+    sessions.set(user.userId, sock)
+    sock.ev.on('creds.update', saveCreds)
+
+    try {
+      const code = await sock.requestPairingCode(phoneNumber)
+      console.log(`[PAIRING CODE] Código gerado: ${code}`)
+      await db.updateWhatsappInstance(instance.id, { status: 'connecting', pairingCode: code })
+
+      // Continuar monitorando conexão
+      sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect } = update
+        if (connection === 'open') {
+          const phone = sock.user?.id?.split(':')[0]
+          await db.updateWhatsappInstance(instance.id, { status: 'connected', phoneNumber: phone, qrCode: null, pairingCode: null })
+        }
+        if (connection === 'close') {
+          const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
+          if (statusCode !== DisconnectReason.loggedOut) {
+            setTimeout(() => connectToWhatsApp(user.userId, instance.id), 5000)
+          } else {
+            await db.updateWhatsappStatus(instance.id, 'disconnected', null)
+          }
+        }
+      })
+
+      res.json({ code })
+    } catch (err: any) {
+      console.error('[PAIRING CODE ERROR]', err?.message)
+      res.status(500).json({ message: 'Erro ao gerar código de pareamento' })
+    }
+  } catch (error: any) {
+    console.error('[PAIRING CODE ERROR]', error?.message, error?.stack)
+    res.status(500).json({ message: 'Erro ao gerar código' })
   }
 })
 
