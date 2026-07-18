@@ -440,38 +440,31 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     }
   })
 
-  // HANDLER de connection.update
-  let pairingRequested = false
-  let qrReceived = false
-  let hasSavedQr = false
-
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update
 
-    // QR CODE - só se NÃO está em reconexão e NÃO tem credenciais registradas
+    // QR CODE - só processar se NÃO está em reconexão e NÃO tem credenciais registradas
     if (qr && !isReconnect && !state.creds.registered) {
-      // Se houver número de telefone (modo pairing), NÃO salvar o QR e apenas ignorar
       if (phoneNumber) {
-        console.log('[MOTA-FLOW] QR recebido em modo pairing, ignorando...')
-        return
-      }
-
-      console.log('[MOTA-FLOW] QR Code recebido!')
-      qrReceived = true
-
-      // Modo QR: Salvar o QR Code
-      try {
-        const qrBase64 = await QRCode.toDataURL(qr, {
-          width: 256,
-          margin: 1,
-          color: { dark: '#000000', light: '#FFFFFF' }
-        })
-        await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: qrBase64, pairingCode: null })
-        console.log('[MOTA-FLOW] QR Code atualizado no banco')
-      } catch (err: any) {
-        console.error('[MOTA-FLOW] Erro QR Base64:', err?.message)
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qr)}`
-        await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: qrUrl, pairingCode: null })
+        // Modo pairing: ignorar QR, o código será gerado via setTimeout
+        console.log('[MOTA-FLOW] QR recebido em modo pairing, ignorando (Pairing Code será gerado via setTimeout)...')
+        // NÃO usar return aqui para não bloquear os outros eventos do handler
+      } else {
+        // Modo QR: salvar o QR Code no banco
+        console.log('[MOTA-FLOW] QR Code recebido!')
+        try {
+          const qrBase64 = await QRCode.toDataURL(qr, {
+            width: 256,
+            margin: 1,
+            color: { dark: '#000000', light: '#FFFFFF' }
+          })
+          await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: qrBase64, pairingCode: null })
+          console.log('[MOTA-FLOW] QR Code atualizado no banco')
+        } catch (err: any) {
+          console.error('[MOTA-FLOW] Erro QR Base64:', err?.message)
+          const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qr)}`
+          await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: qrUrl, pairingCode: null })
+        }
       }
     }
 
@@ -487,8 +480,6 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
       console.log(`[MOTA-FLOW] Conexão fechada: ${statusCode}`)
 
-      // 401 = loggedOut - NÃO reconectar
-      // Qualquer outro (incluindo 515) = reconectar
       if (statusCode === DisconnectReason.loggedOut) {
         console.log(`[MOTA-FLOW] Desconectado definitivamente (statusCode ${statusCode}), não reconectar`)
         await db.updateWhatsappInstance(instanceId, { status: 'disconnected', phoneNumber: null, qrCode: null, pairingCode: null })
@@ -496,7 +487,6 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
         try { fs.rmSync(sessionPath, { recursive: true, force: true }) } catch {}
       } else {
         console.log(`[MOTA-FLOW] Reconectando em 1500ms (statusCode ${statusCode})...`)
-        // Atualizar status para disconnected enquanto tenta reconectar para refletir no site
         await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null, pairingCode: null })
         setTimeout(() => connectToWhatsApp(userId, instanceId, reconnectPhone, true), 1500)
       }
