@@ -26,7 +26,14 @@ import QRCode from 'qrcode'
 const execAsync = promisify(exec)
 const sessions = new Map<number, any>()
 // const pendingPairingNumbers = new Map<number, string>() // Removido: agora usamos phoneNumber diretamente via closure
-const messageStates = new Map<string, { flowId: number, menuId: string, userId: number, instanceId: number }>()
+const messageStates = new Map<string, { 
+  flowId: number, 
+  menuId: string, 
+  userId: number, 
+  instanceId: number, 
+  status?: 'active' | 'finished',
+  lastInteraction?: number 
+}>()
 const app = express()
 const PORT = process.env.PORT || 8080
 
@@ -595,6 +602,37 @@ async function processMessage(sock: any, msg: any, userId: number, instanceId: n
   }
 
   let state = messageStates.get(sender)
+  const input = messageText.trim().toLowerCase()
+
+  // Se o usuário digitar "menu", reiniciar o fluxo independente do estado
+  if (input === 'menu' || input === 'voltar' || input === 'inicio') {
+    const rootMenu = flowData.menus[flowData.rootMenuId]
+    if (rootMenu) {
+      await sock.sendMessage(sender, { text: buildMenuMessage(rootMenu) })
+      messageStates.set(sender, { 
+        flowId: 0, 
+        menuId: flowData.rootMenuId, 
+        userId, 
+        instanceId, 
+        status: 'active',
+        lastInteraction: Date.now() 
+      })
+      return
+    }
+  }
+
+  // Se o estado for 'finished', verificar cooldown (ex: 24 horas = 86400000 ms)
+  if (state?.status === 'finished') {
+    const cooldown = 24 * 60 * 60 * 1000
+    const now = Date.now()
+    if (state.lastInteraction && (now - state.lastInteraction < cooldown)) {
+      console.log(`[MOTA-FLOW] Usuário ${sender} em cooldown, ignorando mensagem.`)
+      return
+    }
+    // Se passou o cooldown, removemos o estado para permitir novo início
+    messageStates.delete(sender)
+    state = undefined
+  }
 
   // Se não tem estado, iniciar menu raiz com a primeira mensagem
   if (!state) {
@@ -604,26 +642,34 @@ async function processMessage(sock: any, msg: any, userId: number, instanceId: n
     // Enviar o menu raiz
     const menuMsg = buildMenuMessage(rootMenu)
     await sock.sendMessage(sender, { text: menuMsg })
-    messageStates.set(sender, { flowId: 0, menuId: flowData.rootMenuId, userId, instanceId })
+    messageStates.set(sender, { 
+      flowId: 0, 
+      menuId: flowData.rootMenuId, 
+      userId, 
+      instanceId, 
+      status: 'active',
+      lastInteraction: Date.now() 
+    })
     return
   }
 
-  // Se já tem estado, verificar se a mensagem é uma opção válida
+  // Se já tem estado ativo, verificar se a mensagem é uma opção válida
   const currentMenu = flowData.menus[state.menuId]
-  const input = messageText.trim().toLowerCase()
   const matchedOption = currentMenu.options.find((opt: MenuOption) => String(opt.number) === input || opt.text.toLowerCase() === input)
 
   // Se não é opção válida, NÃO responder - ignorar
   if (!matchedOption) return
 
   // Opção válida encontrada - processar
+  state.lastInteraction = Date.now()
   if (matchedOption.nextMenuId) {
     const nextMenu = flowData.menus[matchedOption.nextMenuId]
     await sock.sendMessage(sender, { text: buildMenuMessage(nextMenu) })
     state.menuId = matchedOption.nextMenuId
   } else {
     await sock.sendMessage(sender, { text: matchedOption.response || 'Obrigado!' })
-    messageStates.delete(sender)
+    // Marcar como finalizado em vez de deletar
+    state.status = 'finished'
   }
 }
 
