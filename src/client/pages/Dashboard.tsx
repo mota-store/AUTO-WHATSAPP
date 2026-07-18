@@ -57,9 +57,16 @@ export default function Dashboard() {
         if (data.instance?.pairingCode && showPairingLoading) {
           setShowPairingLoading(false)
         }
-        // Se conectou, parar loading
-        if (data.instance?.status === 'connected' && showPairingLoading) {
-          setShowPairingLoading(false)
+        // Se conectou, fechar modal e parar loading
+        if (data.instance?.status === 'connected') {
+          if (showConnectModal) {
+            setShowConnectModal(false)
+            toast.success('WhatsApp conectado com sucesso!')
+            stopFastPolling()
+          }
+          if (showPairingLoading) {
+            setShowPairingLoading(false)
+          }
         }
       }
     } catch (error) {

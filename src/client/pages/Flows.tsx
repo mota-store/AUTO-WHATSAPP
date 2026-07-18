@@ -10,7 +10,6 @@ import {
   RefreshCw,
   Search,
   Power,
-  PowerOff,
 } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
 
@@ -169,16 +168,16 @@ export default function Flows() {
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
-                      <button 
+                      <button
                         onClick={() => handleActivate(flow.id, flow.isActive)}
                         className={`p-2 rounded-lg transition-all ${
-                          flow.isActive 
-                            ? 'text-emerald-500 bg-emerald-500/10' 
-                            : 'text-zinc-500 hover:text-primary hover:bg-primary/10'
+                          flow.isActive
+                            ? 'text-emerald-500 bg-emerald-500/10 cursor-default'
+                            : 'text-red-500 bg-red-500/10 hover:bg-red-500/20'
                         }`}
                         title={flow.isActive ? 'Fluxo ativo' : 'Ativar fluxo'}
                       >
-                        {flow.isActive ? <Power className="w-4 h-4" /> : <PowerOff className="w-4 h-4" />}
+                        <Power className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => handleDelete(flow.id)}
@@ -193,9 +192,9 @@ export default function Flows() {
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-bold text-zinc-600">{new Date(flow.createdAt).toLocaleDateString()}</span>
                       <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${
-                        flow.isActive 
-                          ? 'bg-emerald-500/20 text-emerald-400' 
-                          : 'bg-zinc-800 text-zinc-600'
+                        flow.isActive
+                          ? 'bg-emerald-500/20 text-emerald-400'
+                          : 'bg-red-500/20 text-red-400'
                       }`}>
                         {flow.isActive ? 'Ativo' : 'Inativo'}
                       </span>
