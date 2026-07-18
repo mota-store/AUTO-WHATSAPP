@@ -264,31 +264,41 @@ export async function syncSchema() {
 
     // Verificar e adicionar colunas que podem não existir
     const [colsResult] = await connection.execute(
-      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME IN ('reset_token', 'reset_token_expiry')`
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME IN ('reset_token', 'reset_token_expiry', 'avatar')`
     )
     const existingCols = (colsResult as any[]).map(c => c.COLUMN_NAME)
     console.log('📊 [DB] Colunas existentes na tabela users:', existingCols)
-    if (!existingCols.includes('reset_token')) {
+    for (const col of ['avatar', 'reset_token', 'reset_token_expiry']) {
+      if (!existingCols.includes(col)) {
+        const colType = col === 'reset_token_expiry' ? 'TIMESTAMP' : 'TEXT'
+        try {
+          await connection.execute(`ALTER TABLE users ADD COLUMN ${col} ${colType}`)
+          console.log(`✅ [DB] Coluna ${col} adicionada com sucesso`)
+        } catch (err: any) {
+          console.error(`❌ [DB] Erro ao adicionar ${col}:`, err.message)
+        }
+      } else {
+        console.log(`✅ [DB] Coluna ${col} já existe`)
+      }
+    }
+    console.log('✅ [DB] Colunas da tabela users verificadas/criadas')
+
+    // Verificar colunas da tabela whatsapp_instances
+    const [waColsResult] = await connection.execute(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'whatsapp_instances' AND COLUMN_NAME IN ('pairing_code')`
+    )
+    const waExistingCols = (waColsResult as any[]).map(c => c.COLUMN_NAME)
+    console.log('📊 [DB] Colunas existentes na tabela whatsapp_instances:', waExistingCols)
+    if (!waExistingCols.includes('pairing_code')) {
       try {
-        await connection.execute(`ALTER TABLE users ADD COLUMN reset_token TEXT`)
-        console.log('✅ [DB] Coluna reset_token adicionada com sucesso')
+        await connection.execute(`ALTER TABLE whatsapp_instances ADD COLUMN pairing_code TEXT`)
+        console.log('✅ [DB] Coluna pairing_code adicionada com sucesso')
       } catch (err: any) {
-        console.error('❌ [DB] Erro ao adicionar reset_token:', err.message)
+        console.error('❌ [DB] Erro ao adicionar pairing_code:', err.message)
       }
     } else {
-      console.log('✅ [DB] Coluna reset_token já existe')
+      console.log('✅ [DB] Coluna pairing_code já existe')
     }
-    if (!existingCols.includes('reset_token_expiry')) {
-      try {
-        await connection.execute(`ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP`)
-        console.log('✅ [DB] Coluna reset_token_expiry adicionada com sucesso')
-      } catch (err: any) {
-        console.error('❌ [DB] Erro ao adicionar reset_token_expiry:', err.message)
-      }
-    } else {
-      console.log('✅ [DB] Coluna reset_token_expiry já existe')
-    }
-    console.log('✅ [DB] Colunas reset_token e reset_token_expiry verificadas/criadas')
 
     // Create whatsapp_instances table
     await connection.execute(`
