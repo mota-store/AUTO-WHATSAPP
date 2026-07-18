@@ -176,7 +176,7 @@ app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
         })
 
         await transporter.sendMail({
-          from: 'MOTA-FLOW <noreply@motaflow.com>',
+          from: `MOTA-FLOW <${process.env.BREVO_SMTP_USER || 'b26c7b001@smtp-brevo.com'}>`,
           to: targetEmail,
           subject: 'Redefinição de Senha - MOTA-FLOW',
           html: `
