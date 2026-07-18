@@ -31,7 +31,13 @@ export default function Dashboard() {
   const [instance, setInstance] = useState<WhatsappInstance | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [showConnectModal, setShowConnectModal] = useState(false)
-  const [connectMethod, setConnectMethod] = useState<'qr' | 'pairing'>('qr')
+  const [connectMethod, setConnectMethod] = useState<'qr' | 'pairing'>(() => {
+    return (localStorage.getItem('mota_connect_method') as 'qr' | 'pairing') || 'qr'
+  })
+
+  useEffect(() => {
+    localStorage.setItem('mota_connect_method', connectMethod)
+  }, [connectMethod])
   const [phoneNumber, setPhoneNumber] = useState('')
   const [isConnecting, setIsConnecting] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -263,9 +269,19 @@ export default function Dashboard() {
                         <img src={instance.qrCode} alt="QR Code" className="w-full h-full object-contain" />
                       ) : (
                         <div className="w-full h-full flex flex-col items-center justify-center gap-3">
-                          <RefreshCw className="w-8 h-8 text-primary animate-spin" />
-                          <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Gerando QR...</p>
-                          <p className="text-[9px] text-zinc-500">Aguarde alguns segundos</p>
+                          {!instance?.pairingCode ? (
+                            <>
+                              <RefreshCw className="w-8 h-8 text-primary animate-spin" />
+                              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Gerando QR...</p>
+                              <p className="text-[9px] text-zinc-500">Aguarde alguns segundos</p>
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+                              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">MODO NÚMERO ATIVO</p>
+                              <p className="text-[9px] text-zinc-500">Use o código abaixo</p>
+                            </>
+                          )}
                         </div>
                       )}
                     </div>
