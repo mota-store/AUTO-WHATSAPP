@@ -375,7 +375,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
     },
     logger: pino({ level: 'silent' }),
-    browser: Browsers.windows('Chrome'),
+    browser: Browsers.macOS('Chrome'),
     connectTimeoutMs: 30000,
     keepAliveIntervalMs: 15000,
     printQRInTerminal: false,
