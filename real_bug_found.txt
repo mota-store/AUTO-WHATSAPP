@@ -1,0 +1,17 @@
+BUG REAL ENCONTRADO!
+
+Na linha 386: await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
+Na linha 403: await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: null, pairingCode: null })
+
+A LINHA 403 É EXECUTADA LOGO APÓS A LINHA 386! Ela zera o pairingCode que acabou de ser salvo!
+
+O fluxo é:
+1. requestPairingCode retorna o código (linha 384)
+2. Salva pairingCode no banco (linha 386)
+3. LOGO DEPOIS, sem condition, executa linha 403 que ZERA pairingCode e qrCode
+
+Isso significa que o pairing code é salvo e imediatamente deletado. O frontend NUNCA vai pegar o código.
+
+A linha 403 era pra ser "limpar o QR quando é modo pairing", mas como está fora de qualquer bloco condicional dentro do `if (qr)`, ela executa SEMPRE após o try/catch do pairing.
+
+CORREÇÃO: Mover a linha 403 para DENTRO do try block, antes do requestPairingCode, ou simplesmente removê-la (já que o pairingCode não-null indica que é modo pairing).

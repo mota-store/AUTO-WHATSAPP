@@ -53,6 +53,14 @@ export default function Dashboard() {
       if (response.ok) {
         const data = await response.json()
         setInstance(data.instance)
+        // Se o pairing code chegou, parar o loading imediatamente
+        if (data.instance?.pairingCode && showPairingLoading) {
+          setShowPairingLoading(false)
+        }
+        // Se conectou, parar loading
+        if (data.instance?.status === 'connected' && showPairingLoading) {
+          setShowPairingLoading(false)
+        }
       }
     } catch (error) {
       console.error('Erro ao carregar dashboard')
@@ -235,21 +243,7 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    {showPairingLoading ? (
-                      // LOADING STATE - mostra spinner enquanto processa
-                      <div className="space-y-4 text-center py-4">
-                        <div className="w-16 h-16 mx-auto relative">
-                          <div className="w-16 h-16 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <Smartphone className="w-6 h-6 text-primary" />
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-sm font-black text-white">Gerando código...</p>
-                          <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Aguarde 5-15 segundos</p>
-                        </div>
-                      </div>
-                    ) : instance?.pairingCode ? (
+                    {instance?.pairingCode ? (
                       // CÓDIGO GERADO
                       <div className="space-y-6 text-center py-2">
                         <p className="text-xs font-black text-primary uppercase tracking-widest">Seu Código</p>
@@ -436,12 +430,6 @@ export default function Dashboard() {
                               <li>Digite o código</li>
                             </ol>
                           </div>
-                        </div>
-                      ) : showPairingLoading ? (
-                        <div className="text-center py-6 space-y-3">
-                          <RefreshCw className="w-8 h-8 text-primary animate-spin mx-auto" />
-                          <p className="text-sm font-black text-white">Gerando código...</p>
-                          <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Aguarde 5-15 segundos</p>
                         </div>
                       ) : (
                         <div className="space-y-3">

@@ -381,6 +381,8 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
         pendingPairingNumbers.delete(userId)
         console.log(`[MOTA-FLOW] Solicitando Pairing Code para: ${number} (após QR)...`)
         try {
+          // Limpar QR antes de solicitar pairing (não mostrar QR no frontend)
+          await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: null, pairingCode: null })
           const code = await sock.requestPairingCode(number)
           console.log(`[MOTA-FLOW] Pairing Code: ${code}`)
           await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
@@ -399,8 +401,6 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
             }
           }, 5000)
         }
-        // Não mostrar o QR se é modo pairing
-        await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: null, pairingCode: null })
       } else {
         // Modo QR: salvar e mostrar o QR
         try {

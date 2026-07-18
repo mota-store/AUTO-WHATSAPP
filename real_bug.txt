@@ -1,0 +1,16 @@
+BUG REAL IDENTIFICADO:
+
+Na linha 238: {showPairingLoading ? ( ... loading ... ) : instance?.pairingCode ? ( ... código ... ) : ( ... input ... )}
+
+O problema: showPairingLoading é setado como TRUE em handleConnect (linha 85).
+NUNCA é setado de volta para FALSE quando o pairingCode chega!
+
+O único lugar que seta showPairingLoading para false é:
+- No useEffect que para quando showConnectModal fecha (linha 137)
+- Se o response.ok falha (linha 105)
+
+Mas quando o pairing code é gerado com sucesso e o polling do dashboard atualiza instance.pairingCode,
+o showPairingLoading continua TRUE, então o frontend NUNCA mostra o código - fica preso no loading.
+
+SOLUÇÃO: Dentro do polling do dashboard, quando detectar que instance.pairingCode existe,
+setar showPairingLoading para false automaticamente.
