@@ -310,14 +310,14 @@ export default function Dashboard() {
                           </button>
                         </div>
                         
-                        <div className="flex justify-center">
-                          <button 
-                            onClick={handleReset}
-                            className="px-8 py-3 bg-red-600 text-white text-[11px] font-black rounded-xl shadow-lg shadow-red-600/20 transition-all uppercase tracking-widest active:scale-95"
-                          >
-                            Trocar de Número
-                          </button>
-                        </div>
+	                        <div className="flex justify-center">
+	                          <button 
+	                            onClick={handleReset}
+	                            className="px-8 py-3 bg-red-600 text-white text-[11px] font-black rounded-xl shadow-lg shadow-red-600/20 transition-all uppercase tracking-widest active:scale-95"
+	                          >
+	                            Trocar de Número
+	                          </button>
+	                        </div>
 
                         <div className="bg-black/30 p-5 rounded-2xl border border-zinc-800/50 text-left space-y-3">
                           <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Passo a passo:</p>
@@ -372,10 +372,18 @@ export default function Dashboard() {
                               </>
                             )}
                           </button>
-                          <p className="text-[10px] text-zinc-500 text-center font-medium animate-pulse">
-                            Aguarde, a notificação chegará em instantes no seu celular
-                          </p>
-                        </div>
+	                          {(instance?.pairingCode || instance?.phoneNumber) && (
+	                            <button 
+	                              onClick={handleReset}
+	                              className="w-full py-3 bg-red-600/10 text-red-500 border border-red-600/20 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-red-600/20 transition-all active:scale-95"
+	                            >
+	                              Limpar Conexão Pendente
+	                            </button>
+	                          )}
+	                          <p className="text-[10px] text-zinc-500 text-center font-medium animate-pulse">
+	                            Aguarde, a notificação chegará em instantes no seu celular
+	                          </p>
+	                        </div>
                       </div>
                     )}
                   </div>
