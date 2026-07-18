@@ -621,12 +621,13 @@ function buildMenuMessage(menu: MenuNode): string {
 
 // ============ SERVE STATIC ============
 
-const distPath = path.resolve(__dirname, 'dist', 'client')
-console.log(`📂 [SYSTEM] Serving from: ${distPath}`)
+// O server.js compilado fica em dist/server.js, o client em dist/client/
+// Em produção (Railway): __dirname = /app/dist → client está em /app/dist/client
+// Em dev (local): __dirname = ./dist → client está em ./dist/client
+const distPath = path.join(__dirname, 'client')
 
-if (fs.existsSync(path.resolve(__dirname, 'dist'))) {
-  console.log('📂 [DEBUG] /dist:', fs.readdirSync(path.resolve(__dirname, 'dist')))
-}
+console.log(`📂 [SYSTEM] Serving from: ${distPath}`)
+console.log('📂 [DEBUG] __dirname:', __dirname)
 
 if (fs.existsSync(distPath)) {
   console.log('✅ [SYSTEM] dist/client found')
@@ -638,16 +639,11 @@ if (fs.existsSync(distPath)) {
   })
 } else {
   console.error('❌ [SYSTEM] dist/client NOT found:', distPath)
-  const fallbackPath = path.resolve(__dirname, 'dist')
-  if (fs.existsSync(path.join(fallbackPath, 'index.html'))) {
-    console.log('✅ [SYSTEM] Fallback: index.html in dist root')
-    app.use(express.static(fallbackPath))
-    app.get('*', (req, res) => {
-      if (!req.path.startsWith('/api')) {
-        res.sendFile(path.join(fallbackPath, 'index.html'))
-      }
-    })
-  }
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api')) {
+      res.status(404).send('Frontend não encontrado. Build não foi executado corretamente.')
+    }
+  })
 }
 
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
