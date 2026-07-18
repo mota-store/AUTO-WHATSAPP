@@ -164,6 +164,23 @@ export default function Dashboard() {
     }
   }
 
+  const handleReset = async () => {
+    if (!instance) return
+    try {
+      const token = localStorage.getItem('token')
+      await fetch(`/api/whatsapp/${instance.id}/reset`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      // Limpar estados locais
+      setInstance({ ...instance, qrCode: undefined, pairingCode: undefined })
+      setPhoneNumber('')
+      setShowPairingLoading(false)
+    } catch (error) {
+      console.error('Erro ao resetar')
+    }
+  }
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
     setCopied(true)
@@ -221,8 +238,7 @@ export default function Dashboard() {
                 <button 
                   onClick={() => { 
                     setConnectMethod('qr'); 
-                    setShowPairingLoading(false);
-                    if (instance) setInstance({ ...instance, qrCode: undefined, pairingCode: undefined });
+                    handleReset();
                   }}
                   className={`flex-1 py-3 rounded-lg text-xs font-black transition-all ${connectMethod === 'qr' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500'}`}
                 >
@@ -231,8 +247,7 @@ export default function Dashboard() {
                 <button 
                   onClick={() => { 
                     setConnectMethod('pairing'); 
-                    setShowPairingLoading(false);
-                    if (instance) setInstance({ ...instance, qrCode: undefined, pairingCode: undefined });
+                    handleReset();
                   }}
                   className={`flex-1 py-3 rounded-lg text-xs font-black transition-all ${connectMethod === 'pairing' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500'}`}
                 >
@@ -287,10 +302,7 @@ export default function Dashboard() {
                           </ol>
                         </div>
                         <button 
-                          onClick={() => {
-                            if (instance) setInstance({ ...instance, pairingCode: undefined });
-                            setPhoneNumber('');
-                          }}
+                          onClick={handleReset}
                           className="w-full py-3 text-xs font-black text-zinc-500 hover:text-white transition-all uppercase tracking-widest"
                         >
                           Usar outro número
