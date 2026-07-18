@@ -17,7 +17,6 @@ export const users = sqliteTable("users", {
 }, (users) => ({
   emailIdx: uniqueIndex("email_idx").on(users.email),
 }));
-});
 
 export const whatsappInstances = sqliteTable("whatsapp_instances", {
   id: integer("id").primaryKey({ autoIncrement: true }),
