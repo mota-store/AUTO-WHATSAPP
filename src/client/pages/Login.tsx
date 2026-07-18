@@ -90,7 +90,7 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [showForgotModal, setShowForgotModal] = useState(false)
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -159,10 +159,7 @@ export default function Login() {
             </div>
 
             <div className="space-y-2">
-              <div className="flex justify-between items-center ml-1 mb-1">
-                <label className="text-xs font-black text-muted-foreground uppercase tracking-widest">Senha</label>
-                <button type="button" onClick={() => setShowForgotModal(true)} className="text-[10px] font-black text-primary hover:underline uppercase tracking-tighter">Esqueceu a senha?</button>
-              </div>
+              <label className="text-xs font-black text-muted-foreground uppercase tracking-widest ml-1 mb-1">Senha</label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                   <Lock className="h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-smooth" />
@@ -216,7 +213,7 @@ export default function Login() {
         </p>
       </div>
 
-      {showForgotModal && <ForgotPasswordModal onClose={() => setShowForgotModal(false)} />}
+
     </div>
   )
 }

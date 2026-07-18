@@ -162,40 +162,39 @@ app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
     setImmediate(async () => {
       try {
         console.log('[EMAIL] Enviando e-mail para', targetEmail)
-        const apiKey = process.env.BREVO_API_KEY || ''
-        if (!apiKey) {
-          console.error('[EMAIL ERROR] BREVO_API_KEY não configurada')
+        const mailtrapToken = process.env.MAILTRAP_API_TOKEN || ''
+        if (!mailtrapToken) {
+          console.error('[EMAIL ERROR] MAILTRAP_API_TOKEN não configurada')
           return
         }
 
-        const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+        const res = await fetch('https://send.api.mailtrap.io/api/send', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'api-key': apiKey,
+            'Authorization': `Bearer ${mailtrapToken}`,
           },
           body: JSON.stringify({
-            sender: { email: 'b26c7b001@smtp-brevo.com', name: 'MOTA-FLOW' },
+            from: { email: 'noreply@motaflow.com', name: 'MOTA-FLOW' },
             to: [{ email: targetEmail }],
             subject: 'Redefinição de Senha - MOTA-FLOW',
-            htmlContent: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <h1 style="color: #25D366;">MOTA-FLOW</h1>
                 <h2>Redefinição de Senha</h2>
                 <p>Você solicitou a redefinição de senha para sua conta MOTA-FLOW.</p>
                 <p>Clique no botão abaixo para redefinir sua senha:</p>
                 <a href="${resetUrl}" style="display: inline-block; background: #25D366; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">Redefinir Senha</a>
                 <p style="color: #666; font-size: 12px; margin-top: 24px;">Este link expira em 1 hora. Se você não solicitou isso, ignore este e-mail.</p>
-              </div>
-            `,
+              </div>`,
+            category: 'Password Reset',
           }),
         })
 
         const data = await res.json()
         if (res.ok) {
-          console.log('[EMAIL OK] E-mail de reset enviado para', targetEmail, '- Message ID:', data.messageId)
+          console.log('[EMAIL OK] E-mail de reset enviado para', targetEmail, '- Message ID:', (data as any)?.message_id)
         } else {
-          console.error('[EMAIL ERROR] Brevo API rejeitou:', JSON.stringify(data))
+          console.error('[EMAIL ERROR] Mailtrap rejeitou:', JSON.stringify(data))
         }
       } catch (emailErr: any) {
         console.error('[EMAIL ERROR] Falha ao enviar e-mail:', emailErr?.message)
