@@ -496,6 +496,15 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     if (connection === 'open') {
       const phone = sock.user?.id?.split(':')[0] || 'desconhecido'
       console.log(`[MOTA-FLOW] Conectado! Número: ${phone}`)
+      
+      // Salvar credenciais imediatamente após abrir a conexão
+      try {
+        await saveCreds()
+        console.log('[MOTA-FLOW] Credenciais salvas após conexão aberta')
+      } catch (err) {
+        console.error('[MOTA-FLOW] Erro ao salvar credenciais iniciais:', err)
+      }
+      
       await db.updateWhatsappInstance(instanceId, { status: 'connected', phoneNumber: phone, qrCode: null, pairingCode: null })
     }
 
@@ -504,15 +513,18 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
       console.log(`[MOTA-FLOW] Conexão fechada: ${statusCode}`)
 
-      if (statusCode === DisconnectReason.loggedOut) {
+      const shouldReconnect = statusCode !== DisconnectReason.loggedOut
+      
+      if (!shouldReconnect) {
         console.log(`[MOTA-FLOW] Desconectado definitivamente (statusCode ${statusCode}), não reconectar`)
         await db.updateWhatsappInstance(instanceId, { status: 'disconnected', phoneNumber: null, qrCode: null, pairingCode: null })
         sessions.delete(userId)
         try { fs.rmSync(sessionPath, { recursive: true, force: true }) } catch {}
       } else {
-        console.log(`[MOTA-FLOW] Reconectando em 1500ms (statusCode ${statusCode})...`)
-        await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null, pairingCode: null })
-        setTimeout(() => connectToWhatsApp(userId, instanceId, reconnectPhone, true), 1500)
+        console.log(`[MOTA-FLOW] Reconectando em 3000ms (statusCode ${statusCode})...`)
+        // Não resetar o phoneNumber no banco durante reconexões temporárias
+        await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: null, pairingCode: null })
+        setTimeout(() => connectToWhatsApp(userId, instanceId, reconnectPhone, true), 3000)
       }
     }
   })
