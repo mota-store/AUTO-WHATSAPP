@@ -307,16 +307,14 @@ function cleanPhoneNumber(num: string): string {
   return num.replace(/\D/g, '')
 }
 
-async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber?: string) {
+async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber?: string, isReconnect = false) {
   const sessionPath = `sessions/session-${userId}`
 
-  console.log(`[MOTA-FLOW] Conectando usuário ${userId}, método: ${phoneNumber ? 'Pairing Code' : 'QR Code'}`)
-
-  // Limpeza de sessão antiga
-  if (fs.existsSync(sessionPath)) {
+  // Apenas limpar sessão na PRIMEIRA conexão (não na reconexão pós-515)
+  if (!isReconnect && fs.existsSync(sessionPath)) {
     try {
       fs.rmSync(sessionPath, { recursive: true, force: true })
-      console.log('[MOTA-FLOW] Sessão antiga removida')
+      console.log('[MOTA-FLOW] Sessão antiga removida (nova conexão)')
     } catch (e) {
       console.log('[MOTA-FLOW] Erro ao remover sessão:', e)
     }
@@ -328,7 +326,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   }
 
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
-  console.log('[MOTA-FLOW] Auth state, registered:', state.creds.registered)
+  console.log('[MOTA-FLOW] Auth state, registered:', state.creds.registered, 'isReconnect:', isReconnect)
 
   if (state.creds.registered) {
     console.log('[MOTA-FLOW] Sessão já registrada, conectando direto...')
@@ -484,9 +482,10 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
 
       if (shouldReconnect) {
         // Após 515 (restartRequired), reconectar mais rápido pois as credenciais já estão salvas
+        // isReconnect=true para NÃO limpar a sessão
         const delay = statusCode === 515 ? 1500 : (statusCode === 408 ? 2000 : 5000)
         console.log(`[MOTA-FLOW] Reconectando em ${delay}ms (statusCode ${statusCode})...`)
-        setTimeout(() => connectToWhatsApp(userId, instanceId), delay)
+        setTimeout(() => connectToWhatsApp(userId, instanceId, undefined, true), delay)
       } else {
         console.log(`[MOTA-FLOW] Desconectado definitivamente (statusCode ${statusCode}), não reconectar`)
         await db.updateWhatsappInstance(instanceId, { status: 'disconnected', phoneNumber: null, qrCode: null, pairingCode: null })
