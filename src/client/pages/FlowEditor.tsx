@@ -141,7 +141,7 @@ export default function FlowEditor() {
     
     newMenus[newMenuId] = {
       id: newMenuId,
-      title: `Resposta para: ${selectedMenu.options[optionIndex].text}`,
+      title: `Após: "${selectedMenu.options[optionIndex].text}"`,
       message: 'O que o robô deve dizer agora?',
       options: [
         { id: `opt_back_${Date.now()}`, number: 0, text: 'Voltar ao início', nextMenuId: flowData.rootMenuId }
@@ -247,25 +247,29 @@ export default function FlowEditor() {
                 <div className="flex justify-center py-8 bg-muted/20 rounded-[3rem] border-2 border-dashed border-border">
                   <div className="w-full max-w-[360px] bg-[#E5DDD5] rounded-[3rem] border-[12px] border-black shadow-2xl overflow-hidden flex flex-col h-[600px]">
                     <div className="bg-[#075E54] p-4 flex items-center gap-3">
-                      <div className="w-10 h-10 bg-white/20 rounded-full"></div>
+                      <img src="/bot-avatar.png" alt="Bot" className="w-10 h-10 rounded-full object-cover" />
                       <div>
-                        <p className="text-white font-black text-sm">Mota Store (Robô)</p>
+                        <p className="text-white font-black text-sm">MOTA-FLOW (Robô)</p>
                         <p className="text-white/70 text-[10px]">Online</p>
                       </div>
                     </div>
                     <div className="flex-1 p-4 space-y-4 overflow-y-auto">
                       <div className="bg-white p-3 rounded-2xl rounded-tl-none shadow-sm max-w-[85%]">
-                        <p className="text-sm whitespace-pre-wrap">{selectedMenu.message}</p>
+                        <p className="text-sm whitespace-pre-wrap text-black">{selectedMenu.message}</p>
                         <div className="mt-3 space-y-1">
                           {selectedMenu.options.map(opt => (
-                            <p key={opt.id} className="text-xs font-bold text-primary">{opt.number}. {opt.text}</p>
+                            <p key={opt.id} className="text-xs font-bold text-[#128C7E]">{opt.number}. {opt.text}</p>
                           ))}
                         </div>
-                        <p className="text-[9px] text-muted-foreground text-right mt-1">12:00</p>
+                        <p className="text-[9px] text-gray-400 text-right mt-1">12:00</p>
                       </div>
                     </div>
                     <div className="bg-[#F0F0F0] p-3 flex gap-2">
-                      <div className="flex-1 bg-white rounded-full px-4 py-2 text-xs text-muted-foreground">Digite uma mensagem</div>
+                      <input 
+                        type="text" 
+                        placeholder="Digite uma mensagem"
+                        className="flex-1 bg-white rounded-full px-4 py-2 text-xs text-black outline-none"
+                      />
                       <div className="w-10 h-10 bg-[#128C7E] rounded-full flex items-center justify-center text-white">
                         <Send className="w-5 h-5" />
                       </div>
@@ -350,7 +354,7 @@ export default function FlowEditor() {
                                     }}
                                     className={`flex items-center gap-2 px-4 py-3 rounded-2xl font-black text-xs transition-all ${option.nextMenuId ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-primary/10 text-primary hover:bg-primary hover:text-white'}`}
                                   >
-                                    <ChevronRight className="w-4 h-4" /> {option.nextMenuId ? 'Editar Próximo Passo' : 'Criar Próximo Passo'}
+                                    <ChevronRight className="w-4 h-4" /> {option.nextMenuId ? 'Editar Resposta' : 'Criar Resposta'}
                                   </button>
                                 )}
                                 <button 
