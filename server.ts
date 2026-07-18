@@ -570,26 +570,39 @@ async function processMessage(sock: any, msg: any, userId: number, instanceId: n
   const sender = msg.key?.remoteJid
   const messageText = msg.message?.conversation || msg.message?.extendedTextMessage?.text || ''
   if (!sender || !messageText) return
+
+  // Ignorar mensagens que não são texto (mídia, sticker, etc.)
+  if (messageText.trim().length === 0) return
+
+  // Comando de teste
   if (messageText.trim().toLowerCase() === 'ping') {
     await sock.sendMessage(sender, { text: '🏓 *Pong!*' })
     return
   }
+
   let state = messageStates.get(sender)
+
+  // Se não tem estado, iniciar menu raiz com a primeira mensagem
   if (!state) {
     const rootMenu = flowData.menus[flowData.rootMenuId]
     if (!rootMenu) return
+    
+    // Enviar o menu raiz
     const menuMsg = buildMenuMessage(rootMenu)
     await sock.sendMessage(sender, { text: menuMsg })
     messageStates.set(sender, { flowId: 0, menuId: flowData.rootMenuId, userId, instanceId })
     return
   }
+
+  // Se já tem estado, verificar se a mensagem é uma opção válida
   const currentMenu = flowData.menus[state.menuId]
   const input = messageText.trim().toLowerCase()
   const matchedOption = currentMenu.options.find((opt: MenuOption) => String(opt.number) === input || opt.text.toLowerCase() === input)
-  if (!matchedOption) {
-    await sock.sendMessage(sender, { text: `⚠️ Opção inválida.\n\n${buildMenuMessage(currentMenu)}` })
-    return
-  }
+
+  // Se não é opção válida, NÃO responder - ignorar
+  if (!matchedOption) return
+
+  // Opção válida encontrada - processar
   if (matchedOption.nextMenuId) {
     const nextMenu = flowData.menus[matchedOption.nextMenuId]
     await sock.sendMessage(sender, { text: buildMenuMessage(nextMenu) })
