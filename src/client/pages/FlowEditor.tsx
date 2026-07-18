@@ -342,7 +342,7 @@ export default function FlowEditor() {
                       }`}
                     >
                       <div className="flex justify-between items-center">
-                        <span className="truncate text-sm">{menu.id === flowData.rootMenuId ? 'Menu Principal' : `Resposta: ${menu.title}`}</span>
+                        <span className="truncate text-sm">{menu.id === flowData.rootMenuId ? 'Menu Principal' : `Resposta: ${menu.title.replace(/^Sub-menu:\s*/, '')}`}</span>
                         {menu.id === flowData.rootMenuId && <span className="text-[8px] bg-primary text-white px-2 py-0.5 rounded-full">INÍCIO</span>}
                       </div>
                     </button>
