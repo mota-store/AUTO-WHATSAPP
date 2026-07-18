@@ -7,13 +7,13 @@ import {
   Trash2, 
   Save, 
   ChevronRight, 
-  Reply, 
-  List, 
-  Smartphone, 
-  Send, 
-  RefreshCw,
-  MessageSquare,
-  Zap
+  MessageSquare, 
+  Zap,
+  Smartphone,
+  Eye,
+  Settings,
+  MousePointer2,
+  ChevronLeft
 } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
 
@@ -47,26 +47,19 @@ export default function FlowEditor() {
     menus: {
       menu_1: {
         id: 'menu_1',
-        title: 'Menu Principal',
-        message: '👋 Olá! Seja muito bem-vindo(a). Como podemos ajudar hoje?',
+        title: 'Início da Conversa',
+        message: '👋 Olá! Seja bem-vindo(a). Como podemos ajudar você hoje?',
         options: [
-          { id: 'opt_1', number: 1, text: 'Produtos', response: '' },
-          { id: 'opt_2', number: 2, text: 'Promoções', response: '' },
-          { id: 'opt_3', number: 3, text: 'Dúvidas Frequentes (FAQ)', response: '' },
-          { id: 'opt_4', number: 4, text: 'Falar com um Atendente', response: 'Perfeito! Descreva sua dúvida com o máximo de detalhes possível.' },
+          { id: 'opt_1', number: 1, text: 'Quero ver os produtos', response: '' },
+          { id: 'opt_2', number: 2, text: 'Falar com atendente', response: 'Um momento, já vamos te atender!' },
         ],
       },
     },
   })
   const [selectedMenuId, setSelectedMenuId] = useState('menu_1')
-  const [navigationHistory, setNavigationHistory] = useState<string[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(!!flowId)
-  const [previewMode, setPreviewMode] = useState<'editor' | 'preview'>('editor')
-
-  // Estado da simulação de conversa no preview
-  const [chatMessages, setChatMessages] = useState<Array<{ type: 'bot' | 'client', text: string }>>([])
-  const [currentMenuId, setCurrentMenuId] = useState<string>('')
+  const [previewMode, setPreviewMode] = useState(false)
 
   useEffect(() => {
     if (flowId) {
@@ -93,7 +86,7 @@ export default function FlowEditor() {
         }
       }
     } catch (error) {
-      toast.error('Erro ao carregar fluxo')
+      toast.error('Erro ao carregar')
     } finally {
       setIsLoading(false)
     }
@@ -101,7 +94,7 @@ export default function FlowEditor() {
 
   const handleSave = async () => {
     if (!flowName.trim()) {
-      toast.error('Nome do fluxo é obrigatório')
+      toast.error('Dê um nome para este fluxo')
       return
     }
 
@@ -125,11 +118,11 @@ export default function FlowEditor() {
       })
 
       if (response.ok) {
-        toast.success(flowId ? 'Fluxo atualizado!' : 'Fluxo criado!')
+        toast.success('Salvo com sucesso!')
         navigate('/flows')
       }
     } catch (error) {
-      toast.error('Erro ao salvar fluxo')
+      toast.error('Erro ao salvar')
     } finally {
       setIsSaving(false)
     }
@@ -137,89 +130,107 @@ export default function FlowEditor() {
 
   const selectedMenu = flowData.menus[selectedMenuId]
 
+  const createNextStep = (optionId: string) => {
+    const optionIndex = selectedMenu.options.findIndex(o => o.id === optionId)
+    if (optionIndex === -1) return
+
+    const newMenuId = `menu_${Date.now()}`
+    const newMenus = { ...flowData.menus }
+    
+    newMenus[newMenuId] = {
+      id: newMenuId,
+      title: `Resposta para: ${selectedMenu.options[optionIndex].text}`,
+      message: 'O que o robô deve dizer agora?',
+      options: [
+        { id: `opt_back_${Date.now()}`, number: 0, text: 'Voltar ao início', nextMenuId: flowData.rootMenuId }
+      ]
+    }
+
+    newMenus[selectedMenuId].options[optionIndex].nextMenuId = newMenuId
+    newMenus[selectedMenuId].options[optionIndex].response = ''
+
+    setFlowData({ ...flowData, menus: newMenus })
+    setSelectedMenuId(newMenuId)
+    toast.success('Novo passo criado!')
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <RefreshCw className="w-12 h-12 text-primary animate-spin" />
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-background flex">
       <Sidebar />
       
-      <main className="flex-1 lg:ml-72 p-6 lg:p-12 transition-all duration-500">
-        <div className="max-w-7xl mx-auto space-y-8">
-          {/* Header Editor */}
-          <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-primary font-black text-xs uppercase tracking-widest">
-                <Zap className="w-4 h-4" />
-                <span>Editor de Automação</span>
+      <main className="flex-1 lg:ml-72 p-4 lg:p-8 transition-all duration-500">
+        <div className="max-w-6xl mx-auto space-y-6">
+          {/* Top Header - Simples */}
+          <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-[2rem] border border-border/50 shadow-sm">
+            <div className="flex items-center gap-4">
+              <button onClick={() => navigate('/flows')} className="p-3 hover:bg-muted rounded-2xl transition-all">
+                <ChevronLeft className="w-6 h-6 text-muted-foreground" />
+              </button>
+              <div>
+                <h1 className="text-2xl font-black tracking-tight">{flowName || 'Novo Atendimento'}</h1>
+                <p className="text-xs font-bold text-primary uppercase tracking-widest">Editor de Mensagens</p>
               </div>
-              <h1 className="text-4xl font-black tracking-tighter">
-                {flowId ? 'Editar Fluxo' : 'Novo Fluxo'}
-              </h1>
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-3 w-full sm:w-auto">
               <button 
-                onClick={() => navigate('/flows')}
-                className="px-6 py-3 bg-muted/50 border border-border rounded-xl font-bold hover:bg-muted transition-all flex items-center gap-2"
+                onClick={() => setPreviewMode(!previewMode)}
+                className={`flex-1 sm:flex-none px-6 py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all ${previewMode ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'}`}
               >
-                <ArrowLeft className="w-5 h-5" /> Cancelar
+                <Eye className="w-5 h-5" /> {previewMode ? 'Voltar ao Editor' : 'Ver como fica no Celular'}
               </button>
               <button 
                 onClick={handleSave}
                 disabled={isSaving}
-                className="btn-primary px-8 py-3 flex items-center gap-2"
+                className="flex-1 sm:flex-none px-8 py-3 bg-whatsapp text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-whatsapp/20 hover:opacity-90 transition-all"
               >
                 {isSaving ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                Salvar Fluxo
+                Salvar Tudo
               </button>
             </div>
           </header>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            {/* Configurações do Fluxo */}
-            <div className="lg:col-span-4 space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left Side - Mapa Simples */}
+            <div className={`${previewMode ? 'hidden' : 'lg:col-span-4'} space-y-4`}>
               <div className="glass-card rounded-[2rem] p-6 border border-border/50">
-                <h3 className="text-lg font-black mb-4 flex items-center gap-2">
-                  <List className="w-5 h-5 text-primary" /> Configurações
+                <h3 className="text-sm font-black uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-2">
+                  <Settings className="w-4 h-4" /> Nome do Atendimento
                 </h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Nome do Fluxo</label>
-                    <input 
-                      type="text"
-                      value={flowName}
-                      onChange={(e) => setFlowName(e.target.value)}
-                      className="w-full px-4 py-3 bg-background border border-border rounded-xl mt-1 font-bold focus:ring-2 focus:ring-primary/20"
-                      placeholder="Ex: Suporte Mota Store"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Descrição</label>
-                    <textarea 
-                      value={flowDescription}
-                      onChange={(e) => setFlowDescription(e.target.value)}
-                      className="w-full px-4 py-3 bg-background border border-border rounded-xl mt-1 font-medium h-24 resize-none"
-                      placeholder="Breve descrição do fluxo..."
-                    />
-                  </div>
-                </div>
+                <input 
+                  type="text"
+                  value={flowName}
+                  onChange={(e) => setFlowName(e.target.value)}
+                  placeholder="Ex: Suporte de Vendas"
+                  className="w-full px-5 py-4 bg-background border border-border rounded-2xl font-bold focus:ring-4 focus:ring-primary/10 transition-all"
+                />
               </div>
 
               <div className="glass-card rounded-[2rem] p-6 border border-border/50">
-                <h3 className="text-lg font-black mb-4 flex items-center gap-2">
-                  <MessageSquare className="w-5 h-5 text-primary" /> Lista de Menus
+                <h3 className="text-sm font-black uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-2">
+                  <MousePointer2 className="w-4 h-4" /> Etapas Criadas
                 </h3>
-                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                <div className="space-y-2">
                   {Object.values(flowData.menus).map(menu => (
                     <button 
                       key={menu.id}
                       onClick={() => setSelectedMenuId(menu.id)}
-                      className={`w-full p-4 rounded-xl text-left transition-all border ${
+                      className={`w-full p-4 rounded-2xl text-left transition-all border-2 ${
                         selectedMenuId === menu.id 
-                        ? 'bg-primary/10 border-primary text-primary font-bold' 
-                        : 'bg-muted/30 border-transparent hover:bg-muted/50'
+                        ? 'border-primary bg-primary/5 text-primary font-black' 
+                        : 'border-transparent bg-muted/30 text-muted-foreground hover:bg-muted/50'
                       }`}
                     >
                       <div className="flex justify-between items-center">
-                        <span className="truncate">{menu.title}</span>
-                        {menu.id === flowData.rootMenuId && <span className="text-[9px] bg-primary text-white px-2 py-0.5 rounded-full">RAIZ</span>}
+                        <span className="truncate text-sm">{menu.title}</span>
+                        {menu.id === flowData.rootMenuId && <span className="text-[8px] bg-primary text-white px-2 py-0.5 rounded-full">INÍCIO</span>}
                       </div>
                     </button>
                   ))}
@@ -227,20 +238,51 @@ export default function FlowEditor() {
               </div>
             </div>
 
-            {/* Editor do Menu Selecionado */}
-            <div className="lg:col-span-8">
-              {selectedMenu && (
-                <div className="glass-card rounded-[2.5rem] p-8 sm:p-10 border border-border/50">
-                  <div className="flex justify-between items-center mb-8">
-                    <div>
-                      <h3 className="text-2xl font-black tracking-tight">{selectedMenu.title}</h3>
-                      <p className="text-muted-foreground font-medium">Configure a mensagem e as opções deste menu.</p>
+            {/* Right Side - Editor Visual */}
+            <div className={`${previewMode ? 'lg:col-span-12' : 'lg:col-span-8'}`}>
+              {previewMode ? (
+                /* Preview Realista Estilo WhatsApp */
+                <div className="flex justify-center py-8 bg-muted/20 rounded-[3rem] border-2 border-dashed border-border">
+                  <div className="w-full max-w-[360px] bg-[#E5DDD5] rounded-[3rem] border-[12px] border-black shadow-2xl overflow-hidden flex flex-col h-[600px]">
+                    <div className="bg-[#075E54] p-4 flex items-center gap-3">
+                      <div className="w-10 h-10 bg-white/20 rounded-full"></div>
+                      <div>
+                        <p className="text-white font-black text-sm">Mota Store (Robô)</p>
+                        <p className="text-white/70 text-[10px]">Online</p>
+                      </div>
+                    </div>
+                    <div className="flex-1 p-4 space-y-4 overflow-y-auto">
+                      <div className="bg-white p-3 rounded-2xl rounded-tl-none shadow-sm max-w-[85%]">
+                        <p className="text-sm whitespace-pre-wrap">{selectedMenu.message}</p>
+                        <div className="mt-3 space-y-1">
+                          {selectedMenu.options.map(opt => (
+                            <p key={opt.id} className="text-xs font-bold text-primary">{opt.number}. {opt.text}</p>
+                          ))}
+                        </div>
+                        <p className="text-[9px] text-muted-foreground text-right mt-1">12:00</p>
+                      </div>
+                    </div>
+                    <div className="bg-[#F0F0F0] p-3 flex gap-2">
+                      <div className="flex-1 bg-white rounded-full px-4 py-2 text-xs text-muted-foreground">Digite uma mensagem</div>
+                      <div className="w-10 h-10 bg-[#128C7E] rounded-full flex items-center justify-center text-white">
+                        <Send className="w-5 h-5" />
+                      </div>
                     </div>
                   </div>
+                </div>
+              ) : (
+                /* Editor Passo a Passo */
+                <div className="glass-card rounded-[2.5rem] p-6 sm:p-10 border border-border/50 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <div>
+                    <h2 className="text-3xl font-black tracking-tight mb-2">{selectedMenu.title}</h2>
+                    <p className="text-muted-foreground font-medium">Escreva o que o robô vai responder nesta etapa.</p>
+                  </div>
 
-                  <div className="space-y-8">
-                    <div>
-                      <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Mensagem do WhatsApp</label>
+                  <div className="space-y-6">
+                    <div className="space-y-3">
+                      <label className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4" /> Mensagem que o robô envia
+                      </label>
                       <textarea 
                         value={selectedMenu.message}
                         onChange={(e) => {
@@ -248,14 +290,14 @@ export default function FlowEditor() {
                           newMenus[selectedMenuId].message = e.target.value;
                           setFlowData({ ...flowData, menus: newMenus });
                         }}
-                        className="w-full px-6 py-4 bg-background border border-border rounded-2xl mt-2 font-medium h-32 focus:ring-4 focus:ring-primary/10"
-                        placeholder="Escreva a mensagem que o cliente receberá..."
+                        className="w-full px-6 py-5 bg-background border-2 border-border rounded-3xl font-medium h-40 focus:border-primary outline-none transition-all text-lg"
+                        placeholder="Ex: Olá! Como posso te ajudar?"
                       />
                     </div>
 
-                    <div className="space-y-4">
+                    <div className="space-y-4 pt-4">
                       <div className="flex justify-between items-center">
-                        <h4 className="text-sm font-black uppercase tracking-widest text-muted-foreground">Opções do Menu</h4>
+                        <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground">Opções para o cliente escolher:</h3>
                         <button 
                           onClick={() => {
                             const newId = `opt_${Date.now()}`;
@@ -268,59 +310,58 @@ export default function FlowEditor() {
                             });
                             setFlowData({ ...flowData, menus: newMenus });
                           }}
-                          className="p-2 bg-primary/10 text-primary rounded-xl hover:bg-primary hover:text-white transition-all"
+                          className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-xl font-black text-xs hover:bg-primary hover:text-white transition-all"
                         >
-                          <Plus className="w-5 h-5" />
+                          <Plus className="w-4 h-4" /> Adicionar Opção
                         </button>
                       </div>
 
-                      <div className="space-y-3">
+                      <div className="grid grid-cols-1 gap-4">
                         {selectedMenu.options.map((option, index) => (
-                          <div key={option.id} className="p-4 bg-muted/30 rounded-2xl border border-border/50 flex flex-col sm:flex-row gap-4 items-center">
-                            <div className="w-10 h-10 bg-background border border-border rounded-xl flex items-center justify-center font-black text-primary">
-                              {option.number}
-                            </div>
-                            <input 
-                              type="text"
-                              value={option.text}
-                              onChange={(e) => {
-                                const newMenus = { ...flowData.menus };
-                                newMenus[selectedMenuId].options[index].text = e.target.value;
-                                setFlowData({ ...flowData, menus: newMenus });
-                              }}
-                              className="flex-1 px-4 py-2 bg-background border border-border rounded-xl font-bold"
-                            />
-                            <div className="flex gap-2">
-                              <button 
-                                onClick={() => {
-                                  const subMenuId = `menu_${Date.now()}`;
-                                  const newMenus = { ...flowData.menus };
-                                  newMenus[subMenuId] = {
-                                    id: subMenuId,
-                                    title: `Sub-menu: ${option.text}`,
-                                    message: 'Escolha uma opção:',
-                                    options: [{ id: `opt_back_${Date.now()}`, number: 0, text: 'Voltar', nextMenuId: selectedMenuId }]
-                                  };
-                                  newMenus[selectedMenuId].options[index].nextMenuId = subMenuId;
-                                  newMenus[selectedMenuId].options[index].response = '';
-                                  setFlowData({ ...flowData, menus: newMenus });
-                                  setSelectedMenuId(subMenuId);
-                                }}
-                                className={`p-2 rounded-xl transition-all ${option.nextMenuId ? 'bg-primary text-white' : 'bg-primary/10 text-primary hover:bg-primary hover:text-white'}`}
-                                title="Criar Sub-menu"
-                              >
-                                <ChevronRight className="w-5 h-5" />
-                              </button>
-                              <button 
-                                onClick={() => {
-                                  const newMenus = { ...flowData.menus };
-                                  newMenus[selectedMenuId].options = newMenus[selectedMenuId].options.filter(o => o.id !== option.id);
-                                  setFlowData({ ...flowData, menus: newMenus });
-                                }}
-                                className="p-2 bg-destructive/10 text-destructive rounded-xl hover:bg-destructive hover:text-white transition-all"
-                              >
-                                <Trash2 className="w-5 h-5" />
-                              </button>
+                          <div key={option.id} className="group bg-muted/20 hover:bg-muted/40 p-5 rounded-[2rem] border border-border/50 transition-all">
+                            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                              <div className="w-12 h-12 bg-white border-2 border-primary rounded-2xl flex items-center justify-center font-black text-primary text-xl shadow-sm">
+                                {option.number}
+                              </div>
+                              <div className="flex-1 w-full">
+                                <label className="text-[10px] font-black uppercase text-muted-foreground mb-1 block">Texto da Opção</label>
+                                <input 
+                                  type="text"
+                                  value={option.text}
+                                  onChange={(e) => {
+                                    const newMenus = { ...flowData.menus };
+                                    newMenus[selectedMenuId].options[index].text = e.target.value;
+                                    setFlowData({ ...flowData, menus: newMenus });
+                                  }}
+                                  className="w-full bg-transparent border-b-2 border-border focus:border-primary outline-none py-1 font-black text-lg transition-all"
+                                />
+                              </div>
+                              <div className="flex gap-2 w-full sm:w-auto justify-end">
+                                {option.number !== 0 && (
+                                  <button 
+                                    onClick={() => {
+                                      if (option.nextMenuId) {
+                                        setSelectedMenuId(option.nextMenuId);
+                                      } else {
+                                        createNextStep(option.id);
+                                      }
+                                    }}
+                                    className={`flex items-center gap-2 px-4 py-3 rounded-2xl font-black text-xs transition-all ${option.nextMenuId ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-primary/10 text-primary hover:bg-primary hover:text-white'}`}
+                                  >
+                                    <ChevronRight className="w-4 h-4" /> {option.nextMenuId ? 'Editar Próximo Passo' : 'Criar Próximo Passo'}
+                                  </button>
+                                )}
+                                <button 
+                                  onClick={() => {
+                                    const newMenus = { ...flowData.menus };
+                                    newMenus[selectedMenuId].options = newMenus[selectedMenuId].options.filter(o => o.id !== option.id);
+                                    setFlowData({ ...flowData, menus: newMenus });
+                                  }}
+                                  className="p-3 bg-destructive/10 text-destructive rounded-2xl hover:bg-destructive hover:text-white transition-all"
+                                >
+                                  <Trash2 className="w-5 h-5" />
+                                </button>
+                              </div>
                             </div>
                           </div>
                         ))}
