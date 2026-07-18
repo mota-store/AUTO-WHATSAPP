@@ -641,7 +641,7 @@ async function processMessage(sock: any, msg: any, userId: number, instanceId: n
 }
 
 function buildMenuMessage(menu: MenuNode): string {
-  let msg = `*${menu.title}*\n\n${menu.message}\n\n`
+  let msg = `${menu.message}\n\n`
   menu.options.forEach(o => { msg += `*${o.number}* - ${o.text}\n` })
   return msg.trim()
 }
