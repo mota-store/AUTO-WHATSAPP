@@ -8,6 +8,7 @@ import { exec } from 'child_process'
 import { promisify } from 'util'
 import fs from 'fs'
 import path from 'path'
+import nodemailer from 'nodemailer'
 import { fileURLToPath } from 'url'
 import makeWASocket, {
   DisconnectReason,
@@ -155,9 +156,7 @@ app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
 
     try {
       // Enviar e-mail via Brevo SMTP (Nodemailer)
-      const nodemailer = await import('nodemailer')
-
-      const transporter = nodemailer.default.createTransport({
+      const transporter = nodemailer.createTransport({
         host: 'smtp-relay.brevo.com',
         port: 587,
         secure: false,
