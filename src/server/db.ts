@@ -262,9 +262,19 @@ export async function syncSchema() {
     `)
     console.log('✅ [DB] Tabela users verificada/criada')
 
-    // Adicionar colunas que podem não existir (para tabelas já criadas anteriormente)
-    await connection.execute(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token TEXT`).catch(() => {})
-    await connection.execute(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMP`).catch(() => {})
+    // Verificar e adicionar colunas que podem não existir (para tabelas já criadas anteriormente)
+    const [cols] = await connection.execute(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME IN ('reset_token', 'reset_token_expiry')`
+    )
+    const existingCols = (cols as any[]).map(c => c.COLUMN_NAME)
+    if (!existingCols.includes('reset_token')) {
+      await connection.execute(`ALTER TABLE users ADD COLUMN reset_token TEXT`)
+      console.log('✅ [DB] Coluna reset_token adicionada')
+    }
+    if (!existingCols.includes('reset_token_expiry')) {
+      await connection.execute(`ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP`)
+      console.log('✅ [DB] Coluna reset_token_expiry adicionada')
+    }
     console.log('✅ [DB] Colunas reset_token e reset_token_expiry verificadas/criadas')
 
     // Create whatsapp_instances table
