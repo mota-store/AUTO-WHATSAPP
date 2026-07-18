@@ -1,9 +1,8 @@
 [build]
-builder = "NIXPACKS"
+builder = "RAILPACK"
+buildCommand = "npm install && npx vite build && npx esbuild server.ts --platform=node --bundle --format=esm --outdir=dist --loader:.ts=ts --packages=external"
 
-[build.nixpacksPlan.phases]
-install.cmd = "npm install"
-build.cmd = "npx vite build && npx esbuild server.ts --platform=node --bundle --format=esm --outdir=dist --loader:.ts=ts --packages=external"
-
-[start]
-cmd = "node dist/server.js"
+[deploy]
+startCommand = "node dist/server.js"
+healthcheckPath = "/"
+healthcheckTimeout = 60
