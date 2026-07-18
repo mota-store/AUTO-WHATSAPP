@@ -390,10 +390,8 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   // Usar versão pré-carregada (já está no baileysVersion)
   const version = baileysVersion
 
-  // Configurar browser: Ubuntu/Chrome é a identificação mais estável para Pairing Code
-  const browserConfig: [string, string, string] = phoneNumber 
-    ? ['Ubuntu', 'Chrome', '20.0.04'] 
-    : ['MotaFlow', 'Chrome', '1.0.0']
+  // Configurar browser: MotaFlow para todos os métodos agora que está estável
+  const browserConfig: [string, string, string] = ['MotaFlow', 'Chrome', '1.0.0']
 
   console.log(`[MOTA-FLOW] Configurando browser: ${browserConfig.join(' ')}`)
 
@@ -422,7 +420,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       const cleanNumber = cleanPhoneNumber(phoneNumber)
       console.log(`[MOTA-FLOW] Agendando Pairing Code para: ${cleanNumber} (Aguardando estabilização total...)`)
       
-      // Delay de 8s para garantir que o socket esteja 100% autenticado e pronto para mobile pairing
+      // Delay reduzido para 5s agora que a conexão está estável
       setTimeout(async () => {
         try {
           if (sock.authState.creds.registered) {

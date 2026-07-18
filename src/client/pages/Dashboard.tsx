@@ -337,14 +337,28 @@ export default function Dashboard() {
                             className="w-full px-5 py-4 bg-black/40 border border-zinc-800 rounded-xl font-bold focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-base"
                           />
                         </div>
-                        <button 
-                          onClick={() => handleConnect(true)}
-                          disabled={isConnecting || !phoneNumber}
-                          className="w-full py-4 bg-primary text-white rounded-xl font-black text-sm shadow-lg shadow-primary/20 hover:opacity-90 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
-                        >
-                          <Zap className="w-5 h-5" />
-                          Gerar Código
-                        </button>
+                        <div className="space-y-3">
+                          <button 
+                            onClick={() => handleConnect(true)}
+                            disabled={isConnecting || !phoneNumber}
+                            className="w-full py-4 bg-primary text-white rounded-xl font-black text-sm shadow-lg shadow-primary/20 hover:opacity-90 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                          >
+                            {isConnecting ? (
+                              <>
+                                <RefreshCw className="w-5 h-5 animate-spin" />
+                                Enviando...
+                              </>
+                            ) : (
+                              <>
+                                <Zap className="w-5 h-5" />
+                                Gerar Código
+                              </>
+                            )}
+                          </button>
+                          <p className="text-[10px] text-zinc-500 text-center font-medium animate-pulse">
+                            Aguarde, a notificação chegará em instantes no seu celular
+                          </p>
+                        </div>
                       </div>
                     )}
                   </div>
