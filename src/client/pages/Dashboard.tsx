@@ -240,17 +240,17 @@ export default function Dashboard() {
         </div>
       )}
 
-      <main className="flex-1 lg:ml-72 p-6 lg:p-12 transition-all duration-500 overflow-x-hidden">
-        <div className="max-w-6xl mx-auto space-y-12">
+      <main className="flex-1 lg:ml-72 p-6 lg:p-12 transition-all duration-500 overflow-hidden h-screen flex flex-col justify-center">
+        <div className="max-w-4xl mx-auto w-full space-y-8 -mt-20">
           
-          {/* Header Sofisticado */}
-          <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-            <div className="space-y-1">
-              <h1 className="text-4xl font-black tracking-tight bg-gradient-to-r from-white to-zinc-500 bg-clip-text text-transparent">
+          {/* Header Centralizado */}
+          <header className="flex flex-col items-center text-center gap-4">
+            <div className="space-y-2">
+              <h1 className="text-5xl font-black tracking-tight bg-gradient-to-r from-white to-zinc-500 bg-clip-text text-transparent">
                 Olá, Bem-vindo
               </h1>
-              <p className="text-zinc-500 font-medium flex items-center gap-2">
-                Gerencie sua automação inteligente <ArrowRight className="w-4 h-4 text-primary" />
+              <p className="text-zinc-500 font-medium flex items-center justify-center gap-2">
+                Sua automação inteligente está pronta <Zap className="w-4 h-4 text-primary" />
               </p>
             </div>
 

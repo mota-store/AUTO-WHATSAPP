@@ -8,8 +8,9 @@ import {
   Save, 
   RefreshCw, 
   ShieldCheck,
-  ChevronRight,
-  LogOut
+  LogOut,
+  Camera,
+  X
 } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
 
@@ -17,10 +18,12 @@ export default function Settings() {
   const navigate = useNavigate()
   const user = JSON.parse(localStorage.getItem('user') || '{}')
   
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [profileImage, setProfileImage] = useState<string | null>(localStorage.getItem('profileImage'))
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,6 +49,7 @@ export default function Settings() {
       const data = await response.json()
       if (response.ok) {
         toast.success('Senha atualizada com sucesso!')
+        setShowPasswordModal(false)
         setCurrentPassword('')
         setNewPassword('')
         setConfirmPassword('')
@@ -59,6 +63,20 @@ export default function Settings() {
     }
   }
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        const base64String = reader.result as string
+        setProfileImage(base64String)
+        localStorage.setItem('profileImage', base64String)
+        toast.success('Foto de perfil atualizada!')
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
   const handleLogout = () => {
     localStorage.removeItem('token')
     localStorage.removeItem('user')
@@ -66,135 +84,155 @@ export default function Settings() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-[#0a0a0a] text-zinc-100 flex font-sans">
       <Sidebar />
       
-      <main className="flex-1 lg:ml-72 p-6 lg:p-12 transition-all duration-500">
-        <div className="max-w-4xl mx-auto space-y-12">
-          {/* Header */}
-          <header className="space-y-2">
-            <div className="flex items-center gap-2 text-primary font-black text-xs uppercase tracking-widest">
-              <ShieldCheck className="w-4 h-4" />
-              <span>Segurança & Perfil</span>
+      {/* Modal de Alteração de Senha */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowPasswordModal(false)}></div>
+          <div className="relative w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 p-8 sm:p-10">
+            <button onClick={() => setShowPasswordModal(false)} className="absolute top-6 right-6 p-2 text-zinc-500 hover:text-white rounded-xl transition-all">
+              <X className="w-6 h-6" />
+            </button>
+            <div className="space-y-8">
+              <div className="space-y-2">
+                <h3 className="text-2xl font-black tracking-tight">Alterar Senha</h3>
+                <p className="text-zinc-500 text-sm font-medium">Mantenha sua conta protegida.</p>
+              </div>
+              <form onSubmit={handleUpdatePassword} className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-zinc-500 uppercase tracking-widest ml-1">Senha Atual</label>
+                  <input
+                    type="password"
+                    required
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="w-full px-6 py-4 bg-black/40 border border-zinc-800 rounded-2xl font-black focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none"
+                    placeholder="••••••••"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-zinc-500 uppercase tracking-widest ml-1">Nova Senha</label>
+                  <input
+                    type="password"
+                    required
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full px-6 py-4 bg-black/40 border border-zinc-800 rounded-2xl font-black focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none"
+                    placeholder="Mín. 6 caracteres"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-zinc-500 uppercase tracking-widest ml-1">Confirmar Nova Senha</label>
+                  <input
+                    type="password"
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full px-6 py-4 bg-black/40 border border-zinc-800 rounded-2xl font-black focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none"
+                    placeholder="••••••••"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full py-4 bg-primary text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-xl shadow-primary/20 hover:opacity-90 transition-all disabled:opacity-50"
+                >
+                  {isLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                  Salvar Nova Senha
+                </button>
+              </form>
             </div>
-            <h1 className="text-4xl font-black tracking-tighter">Configurações</h1>
-            <p className="text-muted-foreground font-medium">Gerencie suas informações pessoais e segurança da conta.</p>
+          </div>
+        </div>
+      )}
+
+      <main className="flex-1 lg:ml-72 p-6 lg:p-12 transition-all duration-500">
+        <div className="max-w-3xl mx-auto space-y-12">
+          {/* Header Minimalista */}
+          <header className="flex flex-col items-center text-center space-y-4">
+            <div className="relative group">
+              <div className="w-32 h-32 rounded-[2.5rem] bg-zinc-900 border-2 border-zinc-800 overflow-hidden shadow-2xl transition-all group-hover:border-primary/50">
+                {profileImage ? (
+                  <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-zinc-800/50">
+                    <User className="w-12 h-12 text-zinc-600" />
+                  </div>
+                )}
+              </div>
+              <label className="absolute bottom-0 right-0 p-3 bg-primary text-white rounded-2xl shadow-xl cursor-pointer hover:scale-110 transition-all">
+                <Camera className="w-5 h-5" />
+                <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+              </label>
+            </div>
+            <div className="space-y-1">
+              <h1 className="text-4xl font-black tracking-tight">{user.name || 'Usuário'}</h1>
+              <p className="text-zinc-500 font-medium flex items-center justify-center gap-2">
+                <Mail className="w-4 h-4" /> {user.email}
+              </p>
+            </div>
           </header>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* Profile Info */}
-            <div className="md:col-span-1 space-y-6">
-              <div className="glass-card rounded-[2rem] p-8 text-center border-2 border-primary/10 relative overflow-hidden group">
-                <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/5 rounded-full blur-3xl group-hover:bg-primary/10 transition-all duration-700"></div>
-                <div className="w-24 h-24 bg-primary/10 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-inner">
-                  <User className="w-12 h-12 text-primary" />
+          <div className="grid grid-cols-1 gap-4">
+            <button 
+              onClick={() => setShowPasswordModal(true)}
+              className="w-full p-8 bg-zinc-900/50 border border-zinc-800/50 rounded-[2rem] flex items-center justify-between hover:bg-zinc-800/50 transition-all group"
+            >
+              <div className="flex items-center gap-6 text-left">
+                <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-all">
+                  <Lock className="w-6 h-6" />
                 </div>
-                <h3 className="text-xl font-black tracking-tight">{user.name || 'Usuário'}</h3>
-                <p className="text-sm text-muted-foreground font-medium flex items-center justify-center gap-2 mt-1">
-                  <Mail className="w-4 h-4" /> {user.email}
-                </p>
-                
-                <button 
-                  onClick={handleLogout}
-                  className="mt-8 w-full py-4 bg-destructive/10 text-destructive rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-destructive hover:text-white transition-all btn-touch"
-                >
-                  <LogOut className="w-5 h-5" />
-                  Sair da Conta
-                </button>
-              </div>
-
-              <div className="bg-muted/30 rounded-[2rem] p-6 border border-border/50">
-                <h4 className="text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2">
-                  <Lock className="w-4 h-4 text-primary" /> Status da Conta
-                </h4>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">Plano</span>
-                    <span className="font-bold text-primary">Premium</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">Vencimento</span>
-                    <span className="font-bold">Ilimitado</span>
-                  </div>
+                <div>
+                  <h3 className="text-lg font-black tracking-tight">Segurança da Conta</h3>
+                  <p className="text-zinc-500 text-sm font-medium">Altere sua senha de acesso</p>
                 </div>
               </div>
-            </div>
-
-            {/* Change Password Form */}
-            <div className="md:col-span-2">
-              <div className="glass-card rounded-[2.5rem] p-8 sm:p-10 border border-border/50">
-                <div className="flex items-center gap-3 mb-8">
-                  <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center">
-                    <Lock className="w-6 h-6 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-black">Alterar Senha</h3>
-                    <p className="text-sm text-muted-foreground">Mantenha sua conta protegida.</p>
-                  </div>
-                </div>
-
-                <form onSubmit={handleUpdatePassword} className="space-y-6">
-                  <div className="space-y-2">
-                    <label className="text-sm font-black ml-2 uppercase tracking-tighter text-muted-foreground">Senha Atual</label>
-                    <div className="relative group">
-                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-all" />
-                      <input
-                        type="password"
-                        required
-                        value={currentPassword}
-                        onChange={(e) => setCurrentPassword(e.target.value)}
-                        className="w-full pl-12 pr-4 py-5 bg-background border border-border rounded-2xl input-focus font-medium transition-all"
-                        placeholder="Digite sua senha atual"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-sm font-black ml-2 uppercase tracking-tighter text-muted-foreground">Nova Senha</label>
-                      <div className="relative group">
-                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-all" />
-                        <input
-                          type="password"
-                          required
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          className="w-full pl-12 pr-4 py-5 bg-background border border-border rounded-2xl input-focus font-medium transition-all"
-                          placeholder="Mín. 6 caracteres"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-black ml-2 uppercase tracking-tighter text-muted-foreground">Confirmar Senha</label>
-                      <div className="relative group">
-                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-all" />
-                        <input
-                          type="password"
-                          required
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          className="w-full pl-12 pr-4 py-5 bg-background border border-border rounded-2xl input-focus font-medium transition-all"
-                          placeholder="Repita a nova senha"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full py-5 bg-primary text-white rounded-3xl font-black text-lg flex items-center justify-center gap-3 shadow-xl shadow-primary/20 hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 mt-4"
-                  >
-                    {isLoading ? <RefreshCw className="w-6 h-6 animate-spin" /> : <Save className="w-6 h-6" />}
-                    Atualizar Senha
-                  </button>
-                </form>
+              <div className="w-10 h-10 bg-zinc-800 rounded-xl flex items-center justify-center group-hover:translate-x-1 transition-all">
+                <ChevronRight className="w-5 h-5" />
               </div>
-            </div>
+            </button>
+
+            <button 
+              onClick={handleLogout}
+              className="w-full p-8 bg-destructive/5 border border-destructive/10 rounded-[2rem] flex items-center justify-between hover:bg-destructive/10 transition-all group"
+            >
+              <div className="flex items-center gap-6 text-left">
+                <div className="w-14 h-14 bg-destructive/10 rounded-2xl flex items-center justify-center group-hover:bg-destructive group-hover:text-white transition-all">
+                  <LogOut className="w-6 h-6 text-destructive group-hover:text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black tracking-tight text-destructive">Encerrar Sessão</h3>
+                  <p className="text-destructive/60 text-sm font-medium">Sair da sua conta no MOTA-FLOW</p>
+                </div>
+              </div>
+              <div className="w-10 h-10 bg-destructive/10 rounded-xl flex items-center justify-center group-hover:translate-x-1 transition-all">
+                <ChevronRight className="w-5 h-5 text-destructive" />
+              </div>
+            </button>
           </div>
         </div>
       </main>
     </div>
+  )
+}
+
+function ChevronRight(props: any) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m9 18 6-6-6-6" />
+    </svg>
   )
 }

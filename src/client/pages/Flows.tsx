@@ -108,10 +108,7 @@ export default function Flows() {
                 className="w-full pl-12 pr-4 py-4 bg-muted/30 border border-border rounded-2xl input-focus font-medium"
               />
             </div>
-            <button className="px-6 py-4 bg-muted/30 border border-border rounded-2xl font-bold flex items-center gap-2 hover:bg-muted/50 transition-all">
-              <Filter className="w-5 h-5" />
-              Filtros
-            </button>
+
           </div>
 
           {/* Flows Grid */}
