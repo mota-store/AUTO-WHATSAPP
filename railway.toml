@@ -1,0 +1,9 @@
+[build]
+builder = "NIXPACKS"
+
+[build.nixpacksPlan.phases]
+install.cmd = "npm install"
+build.cmd = "npx vite build && npx esbuild server.ts --platform=node --bundle --format=esm --outdir=dist --loader:.ts=ts --packages=external"
+
+[start]
+cmd = "node dist/server.js"
