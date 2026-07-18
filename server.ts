@@ -720,23 +720,21 @@ async function bootstrap() {
     await db.syncSchema()
     console.log('✅ [MOTA-FLOW] Schema OK')
 
-    // PRE-LOAD Baileys version before accepting connections
-    console.log('🔄 [MOTA-FLOW] Pré-carregando versão Baileys...')
-    await preloadBaileysVersion()
+    // PRE-LOAD Baileys version in BACKGROUND (não bloqueia o servidor)
+    console.log('🔄 [MOTA-FLOW] Pré-carregando versão Baileys (background)...')
+    preloadBaileysVersion().then(() => {
+      console.log(`   Versão Baileys pronta: ${baileysVersion.join('.')}`)
+    }).catch(() => {
+      console.log('⚠️ [MOTA-FLOW] Usando versão fallback:', baileysVersion.join('.'))
+    })
 
     app.listen(PORT, async () => {
       console.log(`✅ [MOTA-FLOW] Servidor rodando na porta ${PORT}`)
-      console.log(`   Versão Baileys: ${baileysVersion.join('.')}`)
+      console.log(`   Versão Baileys (fallback): ${baileysVersion.join('.')}`)
 
       // AUTO-RECONNECT: restaurar sessões conectadas após restart
       try {
         console.log('🔄 [MOTA-FLOW] Verificando sessões para reconectar...')
-        // Usar query SQL direta para encontrar instâncias connected
-        const { pool } = await import('mysql2/promise')
-        // Importar pool do db
-        const dbModule = await import('./src/server/db')
-        // Reconectar todas as instâncias que estavam connected
-        // (Simplificado: só reconecta se a sessão existe no filesystem)
         const sessionDirs = fs.readdirSync('sessions', { withFileTypes: true })
           .filter(d => d.isDirectory())
           .map(d => d.name)
@@ -746,7 +744,6 @@ async function bootstrap() {
           if (!userIdMatch) continue
           const userId = parseInt(userIdMatch[1])
           
-          // Verificar se existem credenciais salvas
           const credsPath = path.join('sessions', dir, 'creds.json')
           if (!fs.existsSync(credsPath)) continue
           
@@ -763,8 +760,6 @@ async function bootstrap() {
     })
   } catch (error: any) {
     console.error('❌ [MOTA-FLOW] Erro no bootstrap:', error?.message)
-    console.error('Stack:', error?.stack)
-    // Start anyway so user can at least see the frontend
     app.listen(PORT, () => {
       console.log(`⚠️ [MOTA-FLOW] Servidor rodando (com erros) na porta ${PORT}`)
     })
