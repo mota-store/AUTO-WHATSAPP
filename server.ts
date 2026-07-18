@@ -20,6 +20,7 @@ import makeWASocket, {
 import pino from 'pino'
 import { Boom } from '@hapi/boom'
 import type { ConnectionState, WAConnectionState } from '@whiskeysockets/baileys'
+import QRCode from 'qrcode'
 
 const execAsync = promisify(exec)
 const sessions = new Map<number, any>()
@@ -27,12 +28,12 @@ const pairingCodeRequests = new Map<number, { number: string, attempts: number, 
 const lastConnectionAttempt = new Map<number, number>()
 const messageStates = new Map<string, { flowId: number, menuId: string, userId: number, instanceId: number }>()
 const app = express()
-const PORT = process.env.PORT || 3000
+const PORT = process.env.PORT || 8080
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-console.log('🚀 [MOTA-FLOW] Iniciando servidor...');
+console.log('🚀 [MOTA-FLOW] Iniciando servidor...')
 
 // Middleware
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }))
@@ -48,7 +49,7 @@ async function authMiddleware(req: Request, res: Response, next: NextFunction) {
   next()
 }
 
-// Routes... (Mantendo as rotas de Auth, Dashboard, Flows que já funcionam)
+// Routes
 app.post('/api/auth/register', async (req: Request, res: Response) => {
   try {
     const { email, password, name } = req.body
@@ -62,7 +63,8 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     const token = await createToken(newUser.id, newUser.email)
     res.json({ token, user: { id: newUser.id, email: newUser.email, name: newUser.name } })
   } catch (error: any) {
-    res.status(500).json({ message: error.message })
+    console.error('[REGISTER ERROR]', error?.message, error?.stack)
+    res.status(500).json({ message: 'Erro ao criar usuário', detail: error?.message })
   }
 })
 
@@ -76,7 +78,8 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     const token = await createToken(user.id, user.email)
     res.json({ token, user: { id: user.id, email: user.email, name: user.name } })
   } catch (error: any) {
-    res.status(500).json({ message: error.message })
+    console.error('[LOGIN ERROR]', error?.message, error?.stack)
+    res.status(500).json({ message: 'Erro ao fazer login', detail: error?.message })
   }
 })
 
@@ -182,13 +185,13 @@ app.delete('/api/flows/:flowId', authMiddleware, async (req: Request, res: Respo
 async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber?: string) {
   const now = Date.now()
   const lastAttempt = lastConnectionAttempt.get(userId) || 0
-  
+
   // Trava de segurança reduzida para 30s para ser mais responsivo
   if (now - lastAttempt < 30000 && !phoneNumber) {
     console.log(`⏳ [MOTA-FLOW] Aguardando 30s para usuário ${userId}`)
     return
   }
-  
+
   lastConnectionAttempt.set(userId, now)
   const sessionPath = `sessions/session-${userId}`
 
@@ -254,7 +257,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
       console.log(`📡 [MOTA-FLOW] Conexão fechada: ${statusCode}`)
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut
-      
+
       if (shouldReconnect) {
         const delay = (statusCode === 515 || statusCode === 408 || statusCode === 401) ? 2000 : 5000
         if (statusCode === 401 || statusCode === 408) {
@@ -287,10 +290,10 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
     const { phoneNumber, usePairingCode } = req.body
     let instance = await db.getWhatsappInstance(user.userId)
     if (!instance) instance = await db.createWhatsappInstance(user.userId)
-    
+
     await db.updateWhatsappStatus(instance.id, 'connecting', null)
     connectToWhatsApp(user.userId, instance.id, usePairingCode ? phoneNumber : undefined)
-    
+
     res.json({ message: 'Iniciando conexão...' })
   } catch (error) {
     res.status(500).json({ message: 'Erro ao iniciar conexão' })
@@ -315,7 +318,7 @@ app.post('/api/whatsapp/:instanceId/disconnect', authMiddleware, async (req: Req
   }
 })
 
-// Funções de Processamento de Mensagem e Build Menu (Mantidas como antes)
+// Funções de Processamento de Mensagem e Build Menu
 async function processMessage(sock: any, msg: any, userId: number, instanceId: number, flowData: MenuFlowData) {
   const sender = msg.key?.remoteJid
   const messageText = msg.message?.conversation || msg.message?.extendedTextMessage?.text || ''
@@ -369,7 +372,7 @@ if (fs.existsSync(path.resolve(__dirname, 'dist'))) {
 if (fs.existsSync(distPath)) {
   console.log('✅ [SYSTEM] Pasta dist/client encontrada!')
   app.use(express.static(distPath))
-  
+
   // Fallback para SPA (Single Page Application)
   app.get('*', (req, res) => {
     if (!req.path.startsWith('/api')) {
@@ -378,7 +381,7 @@ if (fs.existsSync(distPath)) {
   })
 } else {
   console.error('❌ [SYSTEM] Pasta dist/client NÃO encontrada no caminho:', distPath)
-  
+
   // Tentar um fallback para a pasta dist raiz caso o build tenha ido para lá
   const fallbackPath = path.resolve(__dirname, 'dist')
   if (fs.existsSync(path.join(fallbackPath, 'index.html'))) {
@@ -397,6 +400,20 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   res.status(500).json({ message: err.message })
 })
 
-app.listen(PORT, () => {
-  console.log(`✅ Servidor rodando na porta ${PORT}`)
-})
+// Bootstrap: sincronizar schema do banco de dados
+async function bootstrap() {
+  try {
+    console.log('🔄 [MOTA-FLOW] Sincronizando schema do banco de dados...')
+    await db.syncSchema()
+    console.log('✅ [MOTA-FLOW] Schema sincronizado com sucesso')
+  } catch (error: any) {
+    console.error('❌ [MOTA-FLOW] Erro ao sincronizar schema:', error?.message)
+    console.error('Stack:', error?.stack)
+  }
+
+  app.listen(PORT, () => {
+    console.log(`✅ [MOTA-FLOW] Servidor rodando na porta ${PORT}`)
+  })
+}
+
+bootstrap()
