@@ -1,0 +1,16 @@
+ERRO: requestPairingCode dá "Connection Closed" porque o socket WebSocket ainda não está conectado ao servidor do WhatsApp quando tentamos enviar a mensagem de pairing.
+
+A causa raiz: makeWASocket inicia uma conexão assíncrona. O connection.update é emitido com "connecting" ANTES do WebSocket estar pronto para enviar mensagens. O requestPairingCode tenta enviar uma mensagem via sendNode/sendRawMessage, mas se o socket ainda não completou o handshake TLS, dá "Connection Closed".
+
+Solução: Em vez de tentar no primeiro evento "connecting", precisamos ESPERAR o socket estar realmente pronto. Estratégias:
+
+1. Ouvir um evento que indique que o socket está pronto para enviar (ex: "connection.update" com algum sinal interno)
+2. Usar um retry com delay: tentar requestPairingCode, se falhar, tentar novamente após 3-5s
+3. Esperar que o evento QR apareça (isso indica que o socket está conectado e funcional) e DEPOIS chamar requestPairingCode
+
+A solução mais confiável é a #3: esperar o QR ser gerado (que só acontece quando o socket está conectado ao servidor WA) e ENTÃO chamar requestPairingCode. Isso funciona porque:
+- O QR só é emitido quando o socket tem conexão real com o WhatsApp server
+- Se o QR foi emitido, o socket pode enviar mensagens
+- requestPairingCode vai funcionar nessa condição
+
+Alternativa: Se não queremos que o QR apareça primeiro, podemos fazer um retry automático com backoff.

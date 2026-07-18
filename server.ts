@@ -363,42 +363,94 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
 
   // HANDLER ÚNICO de connection.update
   let pairingRequested = false  // garantir que só chama uma vez
+  let qrReceived = false  // indica que o socket está conectado ao servidor WA
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update
 
     // QR CODE: gerado automaticamente quando sem credenciais
+    // Isso também sinaliza que o socket está conectado ao servidor WA
     if (qr) {
       console.log('[MOTA-FLOW] QR Code recebido!')
-      try {
-        const qrBase64 = await QRCode.toDataURL(qr, {
-          width: 256,
-          margin: 1,
-          color: { dark: '#000000', light: '#FFFFFF' }
-        })
-        await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: qrBase64, pairingCode: null })
-        console.log('[MOTA-FLOW] QR Code salvo no banco')
-      } catch (err: any) {
-        console.error('[MOTA-FLOW] Erro QR Base64:', err?.message)
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qr)}`
-        await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: qrUrl, pairingCode: null })
+      qrReceived = true
+
+      // Se é modo pairing, usar o QR como sinal de que o socket está pronto
+      if (pendingPairingNumbers.has(userId) && !pairingRequested) {
+        pairingRequested = true
+        const number = pendingPairingNumbers.get(userId)!
+        pendingPairingNumbers.delete(userId)
+        console.log(`[MOTA-FLOW] Solicitando Pairing Code para: ${number} (após QR)...`)
+        try {
+          const code = await sock.requestPairingCode(number)
+          console.log(`[MOTA-FLOW] Pairing Code: ${code}`)
+          await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
+        } catch (err: any) {
+          console.error('[MOTA-FLOW] Erro Pairing Code:', err?.message, err?.stack)
+          // Se falhar mesmo após QR, tentar com retry após 5s
+          console.log('[MOTA-FLOW] Tentando novamente em 5s...')
+          setTimeout(async () => {
+            try {
+              const code = await sock.requestPairingCode(number)
+              console.log(`[MOTA-FLOW] Pairing Code (retry): ${code}`)
+              await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
+            } catch (retryErr: any) {
+              console.error('[MOTA-FLOW] Erro Pairing Code (retry):', retryErr?.message)
+              await db.updateWhatsappInstance(instanceId, { status: 'disconnected' })
+            }
+          }, 5000)
+        }
+        // Não mostrar o QR se é modo pairing
+        await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: null, pairingCode: null })
+      } else {
+        // Modo QR: salvar e mostrar o QR
+        try {
+          const qrBase64 = await QRCode.toDataURL(qr, {
+            width: 256,
+            margin: 1,
+            color: { dark: '#000000', light: '#FFFFFF' }
+          })
+          await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: qrBase64, pairingCode: null })
+          console.log('[MOTA-FLOW] QR Code salvo no banco')
+        } catch (err: any) {
+          console.error('[MOTA-FLOW] Erro QR Base64:', err?.message)
+          const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qr)}`
+          await db.updateWhatsappInstance(instanceId, { status: 'connecting', qrCode: qrUrl, pairingCode: null })
+        }
       }
     }
 
-    // PAIRING CODE: dentro do connection.update, quando connecting ou qr
-    if (!pairingRequested && pendingPairingNumbers.has(userId) && !state.creds.registered && (connection === 'connecting' || !!qr)) {
-      pairingRequested = true
-      const number = pendingPairingNumbers.get(userId)!
-      pendingPairingNumbers.delete(userId)
-      console.log(`[MOTA-FLOW] Solicitando Pairing Code para: ${number}`)
-      try {
-        const code = await sock.requestPairingCode(number)
-        console.log(`[MOTA-FLOW] Pairing Code: ${code}`)
-        await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
-      } catch (err: any) {
-        console.error('[MOTA-FLOW] Erro Pairing Code:', err?.message, err?.stack)
-        await db.updateWhatsappInstance(instanceId, { status: 'disconnected' })
-      }
+    // Fallback: se está em connecting há tempo e não recebeu QR, tentar pairing direto
+    // (isso ajuda se o QR nunca é emitido por algum motivo)
+    if (!pairingRequested && !qrReceived && pendingPairingNumbers.has(userId) && connection === 'connecting') {
+      // Esperar 8 segundos para o socket estar pronto antes de tentar
+      const waitMs = 8000
+      console.log(`[MOTA-FLOW] Aguardando ${waitMs}ms para socket ficar pronto...`)
+      setTimeout(async () => {
+        if (!pairingRequested && pendingPairingNumbers.has(userId)) {
+          pairingRequested = true
+          const number = pendingPairingNumbers.get(userId)!
+          pendingPairingNumbers.delete(userId)
+          console.log(`[MOTA-FLOW] Solicitando Pairing Code (fallback) para: ${number}`)
+          try {
+            const code = await sock.requestPairingCode(number)
+            console.log(`[MOTA-FLOW] Pairing Code (fallback): ${code}`)
+            await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
+          } catch (err: any) {
+            console.error('[MOTA-FLOW] Erro Pairing Code (fallback):', err?.message, err?.stack)
+            // Retry após 5s
+            setTimeout(async () => {
+              try {
+                const code = await sock.requestPairingCode(number)
+                console.log(`[MOTA-FLOW] Pairing Code (fallback retry): ${code}`)
+                await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
+              } catch (retryErr: any) {
+                console.error('[MOTA-FLOW] Erro Pairing Code (fallback retry):', retryErr?.message)
+                await db.updateWhatsappInstance(instanceId, { status: 'disconnected' })
+              }
+            }, 5000)
+          }
+        }
+      }, waitMs)
     }
 
     // CONECTADO
