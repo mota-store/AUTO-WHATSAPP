@@ -405,10 +405,11 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     },
     logger: pino({ level: 'silent' }),
     browser: browserConfig,
-    connectTimeoutMs: 30000,
-    keepAliveIntervalMs: 15000,
+    connectTimeoutMs: 60000, // Aumentado para 60s
+    keepAliveIntervalMs: 30000,
     printQRInTerminal: false,
-    maxMsgRetryCount: 3,
+    maxMsgRetryCount: 5, // Aumentado para 5
+    retryRequestDelayMs: 2000,
   })
 
   sessions.set(userId, sock)
@@ -417,31 +418,34 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   const reconnectPhone = phoneNumber
 
     // SEMPRE precisa de QR/pairing na primeira conexão (não na reconexão)
-    // Mesmo se creds.registered=true, na primeira conexão limpamos a sessão
-    // e o Baileys vai emitir QR ou aceitar pairing
     if (!isReconnect && phoneNumber) {
       const cleanNumber = cleanPhoneNumber(phoneNumber)
-      console.log(`[MOTA-FLOW] Agendando Pairing Code para: ${cleanNumber}`)
+      console.log(`[MOTA-FLOW] Agendando Pairing Code para: ${cleanNumber} (Aguardando estabilização do socket...)`)
+      
+      // Aumentado para 6s para garantir que o socket esteja pronto e autenticado nos servidores do WA
       setTimeout(async () => {
         try {
+          console.log(`[MOTA-FLOW] Solicitando Pairing Code para ${cleanNumber}...`)
           const code = await sock.requestPairingCode(cleanNumber)
-          console.log(`[MOTA-FLOW] Pairing Code gerado: ${code}`)
+          console.log(`[MOTA-FLOW] Pairing Code gerado com sucesso: ${code}`)
           await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
         } catch (err: any) {
-          console.error('[MOTA-FLOW] Erro ao solicitar Pairing Code:', err?.message)
-          // Tentar novamente em 5s
+          console.error('[MOTA-FLOW] Erro ao solicitar Pairing Code:', err?.message || err)
+          
+          // Tentar novamente em 10s se falhar (pode ser rate limit ou socket não pronto)
           setTimeout(async () => {
             try {
+              console.log(`[MOTA-FLOW] Tentando Pairing Code novamente para ${cleanNumber}...`)
               const code2 = await sock.requestPairingCode(cleanNumber)
-              console.log(`[MOTA-FLOW] Pairing Code (retry): ${code2}`)
+              console.log(`[MOTA-FLOW] Pairing Code gerado na segunda tentativa: ${code2}`)
               await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code2, qrCode: null })
             } catch (retryErr: any) {
-              console.error('[MOTA-FLOW] Erro Pairing Code (retry):', retryErr?.message)
-              await db.updateWhatsappInstance(instanceId, { status: 'disconnected' })
+              console.error('[MOTA-FLOW] Falha definitiva ao gerar Pairing Code:', retryErr?.message || retryErr)
+              await db.updateWhatsappInstance(instanceId, { status: 'disconnected', pairingCode: null })
             }
-          }, 5000)
+          }, 10000)
         }
-      }, 3000)
+      }, 6000)
     }
   
   sock.ev.on('creds.update', async () => {
