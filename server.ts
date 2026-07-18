@@ -154,34 +154,36 @@ app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
     const resetUrl = `${process.env.APP_URL || 'https://auto-whatsapp-production-73d9.up.railway.app'}/reset-password/${resetToken}`
 
     try {
-      const emailResponse = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-          'Content-Type': 'application/json',
+      // Enviar e-mail via Brevo SMTP (Nodemailer)
+      const nodemailer = await import('nodemailer')
+
+      const transporter = nodemailer.default.createTransport({
+        host: 'smtp-relay.brevo.com',
+        port: 587,
+        secure: false,
+        auth: {
+          user: process.env.BREVO_SMTP_USER || '',
+          pass: process.env.BREVO_SMTP_PASSWORD || '',
         },
-        body: JSON.stringify({
-          from: 'MOTA-FLOW <onboarding@resend.dev>',
-          to: [email],
-          subject: 'Redefinição de Senha - MOTA-FLOW',
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h1 style="color: #25D366;">MOTA-FLOW</h1>
-              <h2>Redefinição de Senha</h2>
-              <p>Você solicitou a redefinição de senha para sua conta MOTA-FLOW.</p>
-              <p>Clique no botão abaixo para redefinir sua senha:</p>
-              <a href="${resetUrl}" style="display: inline-block; background: #25D366; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">Redefinir Senha</a>
-              <p style="color: #666; font-size: 12px; margin-top: 24px;">Este link expira em 1 hora. Se você não solicitou isso, ignore este e-mail.</p>
-            </div>
-          `,
-        }),
       })
 
-      if (!emailResponse.ok) {
-        console.error('[EMAIL ERROR] Resend API:', await emailResponse.text())
-      } else {
-        console.log('[EMAIL OK] E-mail de reset enviado para', email)
-      }
+      await transporter.sendMail({
+        from: 'MOTA-FLOW <noreply@motaflow.com>',
+        to: email,
+        subject: 'Redefinição de Senha - MOTA-FLOW',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h1 style="color: #25D366;">MOTA-FLOW</h1>
+            <h2>Redefinição de Senha</h2>
+            <p>Você solicitou a redefinição de senha para sua conta MOTA-FLOW.</p>
+            <p>Clique no botão abaixo para redefinir sua senha:</p>
+            <a href="${resetUrl}" style="display: inline-block; background: #25D366; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">Redefinir Senha</a>
+            <p style="color: #666; font-size: 12px; margin-top: 24px;">Este link expira em 1 hora. Se você não solicitou isso, ignore este e-mail.</p>
+          </div>
+        `,
+      })
+
+      console.log('[EMAIL OK] E-mail de reset enviado para', email)
     } catch (emailErr: any) {
       console.error('[EMAIL ERROR] Falha ao enviar e-mail:', emailErr?.message)
     }
