@@ -501,6 +501,8 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
         try { fs.rmSync(sessionPath, { recursive: true, force: true }) } catch {}
       } else {
         console.log(`[MOTA-FLOW] Reconectando em 1500ms (statusCode ${statusCode})...`)
+        // Atualizar status para disconnected enquanto tenta reconectar para refletir no site
+        await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null, pairingCode: null })
         setTimeout(() => connectToWhatsApp(userId, instanceId, reconnectPhone, true), 1500)
       }
     }
