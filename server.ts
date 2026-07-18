@@ -390,8 +390,10 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   // Usar versão pré-carregada (já está no baileysVersion)
   const version = baileysVersion
 
-  // Configurar browser: MotaFlow para todos os métodos agora que está estável
-  const browserConfig: [string, string, string] = ['MotaFlow', 'Chrome', '1.0.0']
+  // Configurar browser: Usar identificação estável para evitar bloqueios de validação
+  const browserConfig: [string, string, string] = phoneNumber 
+    ? ['Chrome (Linux)', '', ''] 
+    : ['MotaFlow', 'Chrome', '1.0.0']
 
   console.log(`[MOTA-FLOW] Configurando browser: ${browserConfig.join(' ')}`)
 
@@ -420,7 +422,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       const cleanNumber = cleanPhoneNumber(phoneNumber)
       console.log(`[MOTA-FLOW] Agendando Pairing Code para: ${cleanNumber} (Aguardando estabilização total...)`)
       
-      // Delay reduzido para 5s agora que a conexão está estável
+      // Delay ajustado para 6s para máxima compatibilidade com a validação do WA
       setTimeout(async () => {
         try {
           if (sock.authState.creds.registered) {
@@ -610,7 +612,10 @@ app.post('/api/whatsapp/:instanceId/reset', authMiddleware, async (req: Request,
     // Matar sessão ativa se houver
     const sock = sessions.get(user.userId)
     if (sock) {
-      try { sock.end(new Error('Reset requested')) } catch (e) {}
+      try { 
+        sock.ev.removeAllListeners('connection.update')
+        sock.end(new Error('Reset requested')) 
+      } catch (e) {}
       sessions.delete(user.userId)
     }
     
