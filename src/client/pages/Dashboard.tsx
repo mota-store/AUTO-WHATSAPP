@@ -248,7 +248,7 @@ export default function Dashboard() {
                       <div className="space-y-6 text-center py-2">
                         <p className="text-xs font-black text-primary uppercase tracking-widest">Seu Código</p>
                         <div className="flex items-center justify-center gap-3">
-                          <span className="text-4xl font-black tracking-[0.15em] text-white font-mono">{instance.pairingCode}</span>
+                          <span className="text-4xl font-black tracking-[0.15em] text-white font-mono">{instance.pairingCode.replace(/^(.{4})(.{4})$/, '$1-$2')}</span>
                           <button 
                             onClick={() => copyToClipboard(instance.pairingCode!)}
                             className="p-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl transition-all"
@@ -413,7 +413,7 @@ export default function Dashboard() {
                         <div className="space-y-6 text-center py-3">
                           <p className="text-xs font-black text-primary uppercase tracking-widest">Código de Acesso</p>
                           <div className="flex items-center justify-center gap-3">
-                            <span className="text-4xl font-black tracking-[0.15em] text-white font-mono">{instance.pairingCode}</span>
+                            <span className="text-4xl font-black tracking-[0.15em] text-white font-mono">{instance.pairingCode.replace(/^(.{4})(.{4})$/, '$1-$2')}</span>
                             <button 
                               onClick={() => copyToClipboard(instance.pairingCode!)}
                               className="p-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl transition-all"
