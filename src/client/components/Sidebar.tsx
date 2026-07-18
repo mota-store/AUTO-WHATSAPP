@@ -32,12 +32,12 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Botão Hambúrguer - Agora na Direita */}
+      {/* Botão Hambúrguer */}
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="lg:hidden fixed top-6 right-6 z-[110] p-4 bg-primary text-white rounded-2xl shadow-2xl shadow-primary/40 hover:scale-105 active:scale-95 transition-all"
+        className="lg:hidden fixed top-4 right-4 z-[110] p-2.5 bg-primary/90 backdrop-blur-sm text-white rounded-xl shadow-lg shadow-primary/30 hover:bg-primary hover:scale-105 active:scale-95 transition-all"
       >
-        {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
       </button>
 
       {/* Overlay */}
