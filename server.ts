@@ -151,43 +151,52 @@ app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
 
     await db.updateResetToken(user.id, resetToken, resetTokenExpiry)
 
-    // Enviar e-mail via API externa (Brevo/Resend)
-    const resetUrl = `${process.env.APP_URL || 'https://auto-whatsapp-production-73d9.up.railway.app'}/reset-password/${resetToken}`
-
-    try {
-      // Enviar e-mail via Brevo SMTP (Nodemailer)
-      const transporter = nodemailer.createTransport({
-        host: 'smtp-relay.brevo.com',
-        port: 587,
-        secure: false,
-        auth: {
-          user: process.env.BREVO_SMTP_USER || '',
-          pass: process.env.BREVO_SMTP_PASSWORD || '',
-        },
-      })
-
-      await transporter.sendMail({
-        from: 'MOTA-FLOW <noreply@motaflow.com>',
-        to: email,
-        subject: 'Redefinição de Senha - MOTA-FLOW',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h1 style="color: #25D366;">MOTA-FLOW</h1>
-            <h2>Redefinição de Senha</h2>
-            <p>Você solicitou a redefinição de senha para sua conta MOTA-FLOW.</p>
-            <p>Clique no botão abaixo para redefinir sua senha:</p>
-            <a href="${resetUrl}" style="display: inline-block; background: #25D366; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">Redefinir Senha</a>
-            <p style="color: #666; font-size: 12px; margin-top: 24px;">Este link expira em 1 hora. Se você não solicitou isso, ignore este e-mail.</p>
-          </div>
-        `,
-      })
-
-      console.log('[EMAIL OK] E-mail de reset enviado para', email)
-    } catch (emailErr: any) {
-      console.error('[EMAIL ERROR] Falha ao enviar e-mail:', emailErr?.message)
-    }
-
+    // Retornar resposta imediatamente para o frontend
     res.json({ message: 'Se o email existir, você receberá um link de redefinição' })
+
+    // Enviar e-mail em background (fire-and-forget)
+    const resetUrl = `${process.env.APP_URL || 'https://auto-whatsapp-production-73d9.up.railway.app'}/reset-password/${resetToken}`
+    const userEmail = email
+    const targetEmail = userEmail
+
+    setImmediate(async () => {
+      try {
+        console.log('[EMAIL] Iniciando envio para', targetEmail)
+        const transporter = nodemailer.createTransport({
+          host: 'smtp-relay.brevo.com',
+          port: 587,
+          secure: false,
+          auth: {
+            user: process.env.BREVO_SMTP_USER || '',
+            pass: process.env.BREVO_SMTP_PASSWORD || '',
+          },
+          connectionTimeout: 10000,
+          greetingTimeout: 10000,
+          socketTimeout: 15000,
+        })
+
+        await transporter.sendMail({
+          from: 'MOTA-FLOW <noreply@motaflow.com>',
+          to: targetEmail,
+          subject: 'Redefinição de Senha - MOTA-FLOW',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h1 style="color: #25D366;">MOTA-FLOW</h1>
+              <h2>Redefinição de Senha</h2>
+              <p>Você solicitou a redefinição de senha para sua conta MOTA-FLOW.</p>
+              <p>Clique no botão abaixo para redefinir sua senha:</p>
+              <a href="${resetUrl}" style="display: inline-block; background: #25D366; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">Redefinir Senha</a>
+              <p style="color: #666; font-size: 12px; margin-top: 24px;">Este link expira em 1 hora. Se você não solicitou isso, ignore este e-mail.</p>
+            </div>
+          `,
+        })
+
+        console.log('[EMAIL OK] E-mail de reset enviado para', targetEmail)
+      } catch (emailErr: any) {
+        console.error('[EMAIL ERROR] Falha ao enviar e-mail:', emailErr?.message)
+        console.error('[EMAIL ERROR] Stack:', emailErr?.stack)
+      }
+    })
   } catch (error: any) {
     console.error('[FORGOT PASSWORD ERROR]', error?.message, error?.stack)
     res.status(500).json({ message: 'Erro ao processar solicitação' })
