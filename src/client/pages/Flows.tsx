@@ -9,8 +9,6 @@ import {
   ExternalLink, 
   RefreshCw,
   Search,
-  Filter,
-  MoreVertical
 } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
 
@@ -50,7 +48,7 @@ export default function Flows() {
   }
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Tem certeza que deseja excluir este fluxo?')) return
+    if (!confirm('Excluir este fluxo?')) return
     try {
       const token = localStorage.getItem('token')
       const response = await fetch(`/api/flows/${id}`, {
@@ -72,109 +70,100 @@ export default function Flows() {
   )
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-[#0a0a0a] text-zinc-100 flex font-sans safe-top safe-bottom">
       <Sidebar />
       
-      <main className="flex-1 lg:ml-72 p-6 lg:p-12 transition-all duration-500">
-        <div className="max-w-6xl mx-auto space-y-10">
+      <main className="flex-1 lg:ml-64 px-4 pt-6 pb-8 transition-all duration-500 overflow-y-auto h-screen">
+        <div className="max-w-2xl mx-auto space-y-6">
           {/* Header */}
-          <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-primary font-black text-xs uppercase tracking-widest">
-                <MessageSquare className="w-4 h-4" />
-                <span>Automação Inteligente</span>
+          <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-primary font-black text-[10px] uppercase tracking-widest">
+                <MessageSquare className="w-3 h-3" />
+                <span>Automação</span>
               </div>
-              <h1 className="text-4xl font-black tracking-tighter">Fluxos de Resposta</h1>
-              <p className="text-muted-foreground font-medium">Crie e gerencie seus menus automáticos do WhatsApp.</p>
+              <h1 className="text-2xl font-black tracking-tighter">Fluxos</h1>
+              <p className="text-zinc-500 text-sm font-medium">Menus automáticos do WhatsApp.</p>
             </div>
             <button 
               onClick={() => navigate('/flow-editor')}
-              className="btn-primary px-8 py-4 rounded-2xl flex items-center justify-center gap-3 text-lg"
+              className="btn-primary px-6 py-3 rounded-xl flex items-center justify-center gap-2 text-sm active:scale-95"
             >
-              <Plus className="w-6 h-6" />
+              <Plus className="w-4 h-4" />
               Novo Fluxo
             </button>
           </header>
 
-          {/* Search & Filters */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1 relative group">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-all" />
-              <input 
-                type="text" 
-                placeholder="Buscar fluxos pelo nome..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-4 bg-muted/30 border border-border rounded-2xl input-focus font-medium"
-              />
-            </div>
-
+          {/* Search */}
+          <div className="relative group">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-primary transition-all" />
+            <input 
+              type="text" 
+              placeholder="Buscar fluxos..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-3 py-3 bg-zinc-900/30 border border-zinc-800 rounded-xl input-focus font-medium text-base"
+            />
           </div>
 
           {/* Flows Grid */}
           {isLoading ? (
-            <div className="py-20 text-center">
-              <RefreshCw className="w-12 h-12 text-primary animate-spin mx-auto mb-4" />
-              <p className="text-muted-foreground font-bold animate-pulse">Carregando seus fluxos...</p>
+            <div className="py-16 text-center">
+              <RefreshCw className="w-10 h-10 text-primary animate-spin mx-auto mb-3" />
+              <p className="text-zinc-500 font-bold text-sm">Carregando...</p>
             </div>
           ) : filteredFlows.length === 0 ? (
-            <div className="glass-card rounded-[3rem] p-20 text-center border-dashed border-2 border-primary/20">
-              <div className="w-20 h-20 bg-primary/10 rounded-3xl flex items-center justify-center mx-auto mb-6">
-                <MessageSquare className="w-10 h-10 text-primary" />
+            <div className="glass-card rounded-2xl p-10 text-center border-dashed border-2 border-primary/20">
+              <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <MessageSquare className="w-8 h-8 text-primary" />
               </div>
-              <h3 className="text-2xl font-black mb-2">Nenhum fluxo encontrado</h3>
-              <p className="text-muted-foreground mb-10 max-w-sm mx-auto font-medium">Você ainda não criou nenhum fluxo de atendimento ou sua busca não retornou resultados.</p>
+              <h3 className="text-lg font-black mb-1">Nenhum fluxo</h3>
+              <p className="text-zinc-500 text-sm mb-6 font-medium">Crie seu primeiro fluxo de atendimento.</p>
               <button 
                 onClick={() => navigate('/flow-editor')}
-                className="btn-secondary px-10 py-4"
+                className="btn-secondary px-6 py-3 rounded-xl text-sm"
               >
                 Criar Primeiro Fluxo
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 gap-4">
               {filteredFlows.map(flow => (
-                <div key={flow.id} className="glass-card rounded-[2rem] p-8 card-hover group relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-2xl group-hover:bg-primary/10 transition-all duration-700"></div>
-                  
-                  <div className="flex justify-between items-start mb-6 relative z-10">
-                    <div className="bg-primary/10 p-4 rounded-2xl group-hover:bg-primary group-hover:text-white transition-all duration-500 shadow-inner">
-                      <MessageSquare className="w-7 h-7" />
+                <div key={flow.id} className="glass-card rounded-xl p-4 card-hover group relative overflow-hidden">
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-start gap-3">
+                      <div className="bg-primary/10 p-2.5 rounded-lg group-hover:bg-primary transition-all duration-300">
+                        <MessageSquare className="w-5 h-5 text-primary group-hover:text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-base font-black tracking-tight group-hover:text-primary transition-colors truncate">{flow.name}</h3>
+                        <p className="text-zinc-500 text-xs font-medium line-clamp-1">{flow.description || 'Sem descrição'}</p>
+                      </div>
                     </div>
                     <div className="flex gap-1">
                       <button 
                         onClick={() => navigate(`/flow-editor/${flow.id}`)}
-                        className="p-2.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-xl transition-all"
-                        title="Editar fluxo"
+                        className="p-2 text-zinc-500 hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
                       >
-                        <Edit2 className="w-5 h-5" />
+                        <Edit2 className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => handleDelete(flow.id)}
-                        className="p-2.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl transition-all"
-                        title="Excluir fluxo"
+                        className="p-2 text-zinc-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
                       >
-                        <Trash2 className="w-5 h-5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
 
-                  <div className="relative z-10">
-                    <h3 className="text-2xl font-black mb-2 tracking-tight group-hover:text-primary transition-colors">{flow.name}</h3>
-                    <p className="text-muted-foreground text-sm font-medium line-clamp-2 mb-8 min-h-[40px]">{flow.description || 'Sem descrição definida para este fluxo.'}</p>
-                    
-                    <div className="flex items-center justify-between pt-6 border-t border-border/50">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Criado em</span>
-                        <span className="text-xs font-bold">{new Date(flow.createdAt).toLocaleDateString()}</span>
-                      </div>
-                      <button 
-                        onClick={() => navigate(`/flow-preview/${flow.id}`)}
-                        className="px-5 py-2.5 bg-primary/10 text-primary rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:bg-primary hover:text-white transition-all shadow-sm"
-                      >
-                        Testar <ExternalLink className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                  <div className="flex items-center justify-between pt-3 mt-3 border-t border-zinc-800/50">
+                    <span className="text-[10px] font-bold text-zinc-600">{new Date(flow.createdAt).toLocaleDateString()}</span>
+                    <button 
+                      onClick={() => navigate(`/flow-preview/${flow.id}`)}
+                      className="px-4 py-2 bg-primary/10 text-primary rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 hover:bg-primary hover:text-white transition-all active:scale-95"
+                    >
+                      Testar <ExternalLink className="w-3 h-3" />
+                    </button>
                   </div>
                 </div>
               ))}

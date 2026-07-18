@@ -35,7 +35,7 @@ export default function Register() {
       if (response.ok) {
         localStorage.setItem('token', data.token)
         localStorage.setItem('user', JSON.stringify(data.user))
-        toast.success('Conta criada com sucesso!')
+        toast.success('Conta criada!')
         navigate('/dashboard')
       } else {
         toast.error(data.message || 'Erro ao criar conta')
@@ -48,100 +48,100 @@ export default function Register() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center gradient-bg px-4 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center gradient-bg px-4 relative overflow-hidden safe-top safe-bottom">
       {/* Decorative Elements */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px] animate-pulse"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/20 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }}></div>
       
       <div className="w-full max-w-md relative z-10">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center p-4 bg-primary rounded-3xl shadow-primary animate-float mb-6">
-            <Wifi className="w-10 h-10 text-white" />
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center p-3 bg-primary rounded-2xl shadow-primary animate-float mb-4">
+            <Wifi className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-4xl font-black gradient-text-whatsapp mb-2 tracking-tighter">MOTA-FLOW</h1>
-          <p className="text-muted-foreground font-medium">Comece sua automação hoje</p>
+          <h1 className="text-3xl font-black gradient-text-whatsapp mb-1 tracking-tighter">MOTA-FLOW</h1>
+          <p className="text-muted-foreground text-sm font-medium">Comece sua automação hoje</p>
         </div>
 
-        <div className="glass-card rounded-[2.5rem] p-8 sm:p-10">
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-2">
-              <label className="text-xs font-black text-muted-foreground uppercase tracking-widest ml-1">Nome Completo</label>
+        <div className="glass-card rounded-2xl p-6">
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">Nome</label>
               <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-smooth" />
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <User className="h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-smooth" />
                 </div>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="block w-full pl-12 pr-4 py-4 bg-background/50 border border-border rounded-2xl input-focus font-medium"
+                  className="block w-full pl-10 pr-3 py-3 bg-background/50 border border-border rounded-xl input-focus font-medium text-base"
                   placeholder="Seu nome"
                   required
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-black text-muted-foreground uppercase tracking-widest ml-1">Email</label>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">Email</label>
               <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-smooth" />
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Mail className="h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-smooth" />
                 </div>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="block w-full pl-12 pr-4 py-4 bg-background/50 border border-border rounded-2xl input-focus font-medium"
+                  className="block w-full pl-10 pr-3 py-3 bg-background/50 border border-border rounded-xl input-focus font-medium text-base"
                   placeholder="seu@email.com"
                   required
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-black text-muted-foreground uppercase tracking-widest ml-1">Senha</label>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">Senha</label>
               <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-smooth" />
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Lock className="h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-smooth" />
                 </div>
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pl-12 pr-12 py-4 bg-background/50 border border-border rounded-2xl input-focus font-medium"
+                  className="block w-full pl-10 pr-10 py-3 bg-background/50 border border-border rounded-xl input-focus font-medium text-base"
                   placeholder="••••••••"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-muted-foreground hover:text-primary transition-smooth btn-touch"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground hover:text-primary transition-smooth z-20"
                 >
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-black text-muted-foreground uppercase tracking-widest ml-1">Confirmar Senha</label>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">Confirmar Senha</label>
               <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-smooth" />
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Lock className="h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-smooth" />
                 </div>
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className={`block w-full pl-12 pr-12 py-4 bg-background/50 border rounded-2xl input-focus font-medium ${password !== confirmPassword && confirmPassword ? 'border-destructive focus:ring-destructive' : 'border-border'}`}
+                  className={`block w-full pl-10 pr-10 py-3 bg-background/50 border rounded-xl input-focus font-medium text-base ${password !== confirmPassword && confirmPassword ? 'border-red-500 focus:ring-red-500' : 'border-border'}`}
                   placeholder="••••••••"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-muted-foreground hover:text-primary transition-smooth btn-touch"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground hover:text-primary transition-smooth z-20"
                 >
-                  {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
@@ -149,22 +149,22 @@ export default function Register() {
             <button
               type="submit"
               disabled={isLoading || password !== confirmPassword}
-              className="w-full btn-primary py-4 text-lg rounded-2xl flex items-center justify-center gap-2 group mt-4"
+              className="w-full btn-primary py-3.5 text-base rounded-xl flex items-center justify-center gap-2 group mt-3 active:scale-95"
             >
               {isLoading ? (
-                <div className="h-6 w-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
               ) : (
                 <>
-                  Criar Minha Conta
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-smooth" />
+                  Criar Conta
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-smooth" />
                 </>
               )}
             </button>
           </form>
 
-          <div className="mt-10 text-center">
+          <div className="mt-6 text-center">
             <p className="text-muted-foreground font-medium text-sm">
-              Já possui uma conta?{' '}
+              Já tem conta?{' '}
               <Link to="/login" className="text-primary font-black hover:underline ml-1">
                 Fazer login
               </Link>
@@ -172,8 +172,8 @@ export default function Register() {
           </div>
         </div>
         
-        <p className="text-center mt-8 text-[10px] text-muted-foreground font-bold uppercase tracking-[0.2em]">
-          &copy; 2026 MOTA-FLOW &bull; PREMIUM AUTOMATION
+        <p className="text-center mt-6 text-[10px] text-muted-foreground font-bold uppercase tracking-[0.2em]">
+          &copy; 2026 MOTA-FLOW
         </p>
       </div>
     </div>

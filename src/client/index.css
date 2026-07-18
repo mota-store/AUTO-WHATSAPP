@@ -23,31 +23,12 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-    --primary: 142 70% 45%; /* Verde WhatsApp #25D366 aproximado em HSL */
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --accent: 142 70% 45%;
-    --accent-foreground: 0 0% 98%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 142 70% 45%;
-    --radius: 0.5rem;
-  }
-
-  .dark {
-    --background: 240 10% 3.9%;
+    --background: 0 0% 4%;
     --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
+    --card: 0 0% 6%;
     --card-foreground: 0 0% 98%;
     --primary: 142 70% 45%;
-    --primary-foreground: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
     --secondary: 240 3.7% 15.9%;
     --secondary-foreground: 0 0% 98%;
     --accent: 142 70% 45%;
@@ -57,27 +38,43 @@
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
     --ring: 142 70% 45%;
+    --radius: 0.75rem;
   }
 }
 
 @layer base {
   * {
     @apply border-border;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    font-size: 16px;
   }
 
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
   }
 
-  html {
-    scroll-behavior: smooth;
+  /* Evitar zoom em inputs no iOS/Android */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+
+  /* Melhor touch targets */
+  button, a {
+    min-height: 44px;
   }
 }
 
 @layer utilities {
   .glass-card {
-    @apply backdrop-blur-md bg-card/80 border border-white/20 dark:border-white/5 shadow-xl;
+    @apply backdrop-blur-md bg-card/80 border border-white/10 shadow-xl;
   }
 
   .gradient-text-whatsapp {
@@ -102,11 +99,11 @@
   }
 
   .btn-primary {
-    @apply bg-primary text-white font-bold py-2 px-4 rounded-xl hover:bg-primary/90 transition shadow-primary active:scale-95;
+    @apply bg-primary text-white font-bold py-3 px-4 rounded-xl hover:bg-primary/90 transition shadow-primary active:scale-95;
   }
 
   .btn-secondary {
-    @apply bg-secondary text-secondary-foreground font-bold py-2 px-4 rounded-xl hover:bg-secondary/80 transition active:scale-95;
+    @apply bg-secondary text-secondary-foreground font-bold py-3 px-4 rounded-xl hover:bg-secondary/80 transition active:scale-95;
   }
 
   .header-sticky {
@@ -154,7 +151,7 @@
   }
 
   .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
+    width: 4px;
   }
   .custom-scrollbar::-webkit-scrollbar-track {
     @apply bg-muted/50 rounded-full;
@@ -163,14 +160,24 @@
     @apply bg-primary/30 rounded-full hover:bg-primary/50;
   }
 
-  /* Hide scrollbar for Chrome, Safari and Opera */
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
 
-  /* Hide scrollbar for IE, Edge and Firefox */
   .no-scrollbar {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Mobile safe area support */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .safe-x {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
   }
 }

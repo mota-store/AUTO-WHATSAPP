@@ -9,13 +9,10 @@ import {
   LogOut, 
   Copy, 
   CheckCircle2, 
-  AlertCircle,
-  Plus,
-  ArrowRight,
   Wifi,
   WifiOff,
   History,
-  Settings,
+  ArrowRight,
   X
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -67,7 +64,6 @@ export default function Dashboard() {
       toast.error('Digite o número do WhatsApp')
       return
     }
-
     setIsConnecting(true)
     try {
       const token = localStorage.getItem('token')
@@ -116,9 +112,9 @@ export default function Dashboard() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a]">
         <div className="relative">
-          <div className="w-16 h-16 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+          <div className="w-14 h-14 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
           <div className="absolute inset-0 flex items-center justify-center">
-            <Zap className="w-6 h-6 text-primary animate-pulse" />
+            <Zap className="w-5 h-5 text-primary animate-pulse" />
           </div>
         </div>
       </div>
@@ -126,110 +122,104 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-zinc-100 flex font-sans selection:bg-primary/30">
+    <div className="min-h-screen bg-[#0a0a0a] text-zinc-100 flex font-sans selection:bg-primary/30 safe-top safe-bottom">
       <Sidebar />
       
-      {/* Modal de Conexão Sofisticado */}
+      {/* Modal de Conexão - Mobile otimizado */}
       {showConnectModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4 animate-in fade-in duration-300">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowConnectModal(false)}></div>
           
-          <div className="relative w-full max-w-2xl bg-zinc-900 border border-zinc-800 rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+          <div className="relative w-full max-w-lg bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-[2rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300 max-h-[90vh] overflow-y-auto">
             <button 
               onClick={() => setShowConnectModal(false)}
-              className="absolute top-8 right-8 p-2 text-zinc-500 hover:text-white hover:bg-white/10 rounded-xl transition-all"
+              className="absolute top-4 right-4 p-2 text-zinc-500 hover:text-white hover:bg-white/10 rounded-xl transition-all z-10"
             >
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5" />
             </button>
 
-            <div className="p-10 md:p-16 space-y-10">
-              <div className="space-y-2">
-                <h2 className="text-3xl font-black tracking-tight">Vincular WhatsApp</h2>
-                <p className="text-zinc-500 font-medium">Escolha como deseja conectar sua conta</p>
+            <div className="p-6 sm:p-8 space-y-6">
+              <div className="space-y-2 pt-2">
+                <h2 className="text-2xl sm:text-3xl font-black tracking-tight">Vincular WhatsApp</h2>
+                <p className="text-zinc-500 text-sm font-medium">Escolha como deseja conectar</p>
               </div>
 
-              <div className="flex p-1 bg-black/40 rounded-2xl border border-zinc-800/50">
+              <div className="flex p-1 bg-black/40 rounded-xl border border-zinc-800/50">
                 <button 
                   onClick={() => setConnectMethod('qr')}
-                  className={`flex-1 py-4 rounded-xl text-xs font-black transition-all ${connectMethod === 'qr' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
+                  className={`flex-1 py-3 rounded-lg text-xs font-black transition-all ${connectMethod === 'qr' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500'}`}
                 >
                   QR CODE
                 </button>
                 <button 
                   onClick={() => setConnectMethod('pairing')}
-                  className={`flex-1 py-4 rounded-xl text-xs font-black transition-all ${connectMethod === 'pairing' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
+                  className={`flex-1 py-3 rounded-lg text-xs font-black transition-all ${connectMethod === 'pairing' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500'}`}
                 >
-                  NÚMERO DE TELEFONE
+                  NÚMERO
                 </button>
               </div>
 
-              <div className="space-y-8">
+              <div className="space-y-6">
                 {connectMethod === 'qr' ? (
-                  <div className="space-y-8 text-center">
-                    <div className="relative aspect-square max-w-[240px] mx-auto bg-white p-6 rounded-[2.5rem] shadow-2xl shadow-primary/10">
+                  <div className="space-y-6 text-center">
+                    <div className="relative aspect-square max-w-[200px] mx-auto bg-white p-4 rounded-2xl shadow-xl shadow-primary/10">
                       {instance?.qrCode ? (
                         <img src={instance.qrCode} alt="QR Code" className="w-full h-full object-contain" />
                       ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center gap-4">
-                          <RefreshCw className="w-10 h-10 text-zinc-200 animate-spin" />
-                          <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Gerando QR Code...</p>
+                        <div className="w-full h-full flex flex-col items-center justify-center gap-3">
+                          <RefreshCw className="w-8 h-8 text-zinc-300 animate-spin" />
+                          <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Gerando...</p>
                           <button 
                             onClick={() => handleConnect(false)}
-                            className="text-[10px] font-black text-primary hover:text-primary/80 uppercase tracking-widest"
+                            className="text-[10px] font-black text-primary uppercase tracking-widest"
                           >
-                            Clique aqui se não gerar
+                            Tentar novamente
                           </button>
                         </div>
                       )}
                     </div>
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                       <p className="text-sm text-zinc-400 font-medium leading-relaxed">
-                        1. Abra o WhatsApp no seu celular<br/>
+                        1. Abra o WhatsApp no celular<br/>
                         2. Vá em <span className="text-white">Aparelhos Conectados</span><br/>
-                        3. Aponte a câmera para este código
+                        3. Aponte a câmera para o código
                       </p>
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-8">
+                  <div className="space-y-6">
                     {instance?.pairingCode ? (
-                      <div className="space-y-8 text-center">
-                        <div className="space-y-2">
-                          <p className="text-xs font-black text-primary uppercase tracking-widest">Seu Código</p>
-                          <div className="flex items-center justify-center gap-4">
-                            <span className="text-5xl font-black tracking-[0.2em] text-white font-mono">{instance.pairingCode}</span>
-                            <button 
-                              onClick={() => copyToClipboard(instance.pairingCode!)}
-                              className="p-3 bg-zinc-800 hover:bg-zinc-700 rounded-2xl transition-all"
-                            >
-                              {copied ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <Copy className="w-5 h-5" />}
-                            </button>
-                          </div>
+                      <div className="space-y-6 text-center py-2">
+                        <p className="text-xs font-black text-primary uppercase tracking-widest">Seu Código</p>
+                        <div className="flex items-center justify-center gap-3">
+                          <span className="text-4xl font-black tracking-[0.15em] text-white font-mono">{instance.pairingCode}</span>
+                          <button 
+                            onClick={() => copyToClipboard(instance.pairingCode!)}
+                            className="p-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl transition-all"
+                          >
+                            {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                          </button>
                         </div>
-                        <p className="text-sm text-zinc-400 font-medium leading-relaxed">
-                          Digite este código no seu celular após selecionar <br/>
-                          <span className="text-white">"Conectar com número de telefone"</span>
-                        </p>
                       </div>
                     ) : (
-                      <div className="space-y-6">
+                      <div className="space-y-4">
                         <div className="space-y-2">
-                          <label className="text-xs font-black text-zinc-500 uppercase tracking-widest ml-1">Número do WhatsApp</label>
+                          <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Número do WhatsApp</label>
                           <input 
-                            type="text" 
+                            type="tel" 
                             placeholder="Ex: 5591988887777"
                             value={phoneNumber}
                             onChange={(e) => setPhoneNumber(e.target.value)}
-                            className="w-full px-6 py-5 bg-black/40 border border-zinc-800 rounded-2xl font-black focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none"
+                            className="w-full px-5 py-4 bg-black/40 border border-zinc-800 rounded-xl font-bold focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-base"
                           />
                         </div>
                         <button 
                           onClick={() => handleConnect(true)}
                           disabled={isConnecting}
-                          className="w-full py-5 bg-primary text-white rounded-2xl font-black text-sm shadow-xl shadow-primary/20 hover:opacity-90 transition-all flex items-center justify-center gap-2"
+                          className="w-full py-4 bg-primary text-white rounded-xl font-black text-sm shadow-lg shadow-primary/20 hover:opacity-90 transition-all flex items-center justify-center gap-2 active:scale-95"
                         >
                           {isConnecting ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
-                          Gerar Código de Acesso
+                          Gerar Código
                         </button>
                       </div>
                     )}
@@ -241,36 +231,36 @@ export default function Dashboard() {
         </div>
       )}
 
-      <main className="flex-1 lg:ml-72 p-6 lg:p-12 transition-all duration-500 overflow-hidden h-screen flex flex-col justify-center">
-        <div className="max-w-4xl mx-auto w-full space-y-8 -mt-20">
+      <main className="flex-1 lg:ml-72 px-4 pt-6 pb-8 transition-all duration-500 overflow-y-auto h-screen">
+        <div className="max-w-2xl mx-auto w-full space-y-5">
           
           {/* Header */}
-          <header className="flex flex-col items-center text-center gap-4">
-            <div className="space-y-2 -translate-x-[5px]">
-              <h1 className="text-5xl font-black tracking-tight bg-gradient-to-r from-white to-zinc-500 bg-clip-text text-transparent">
+          <header className="flex flex-col items-center text-center gap-3">
+            <div className="space-y-1 -translate-x-[5px]">
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tight bg-gradient-to-r from-white to-zinc-500 bg-clip-text text-transparent">
                 Olá, Bem-vindo
               </h1>
-              <p className="text-zinc-500 font-medium flex items-center justify-center gap-2">
-                Sua automação inteligente está pronta <Zap className="w-4 h-4 text-primary" />
+              <p className="text-zinc-500 text-sm font-medium flex items-center justify-center gap-2">
+                Sua automação está pronta <Zap className="w-3 h-3 text-primary" />
               </p>
             </div>
 
-            <div className="flex items-center gap-3 bg-zinc-900/50 p-2 rounded-2xl border border-zinc-800/50 backdrop-blur-xl">
-              <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+            <div className="flex items-center gap-2 bg-zinc-900/50 px-3 py-2 rounded-xl border border-zinc-800/50 backdrop-blur-xl">
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest ${
                 instance?.status === 'connected' 
                 ? 'bg-emerald-500/10 text-emerald-500' 
                 : 'bg-zinc-800 text-zinc-500'
               }`}>
                 {instance?.status === 'connected' ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-                {instance?.status === 'connected' ? 'Sistema Online' : 'Sistema Offline'}
+                {instance?.status === 'connected' ? 'Online' : 'Offline'}
               </div>
               {instance?.status === 'connected' && (
                 <button 
                   onClick={handleDisconnect}
-                  className="p-2 hover:bg-red-500/10 text-zinc-500 hover:text-red-500 rounded-xl transition-all"
+                  className="p-1.5 hover:bg-red-500/10 text-zinc-500 hover:text-red-500 rounded-lg transition-all"
                   title="Desconectar"
                 >
-                  <LogOut className="w-5 h-5" />
+                  <LogOut className="w-4 h-4" />
                 </button>
               )}
             </div>
@@ -278,127 +268,119 @@ export default function Dashboard() {
 
           {/* Conteúdo Principal */}
           {!instance || instance.status === 'disconnected' ? (
-            /* EMPTY STATE - SOFISTICADO */
             <div className="relative group">
-              <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 to-emerald-500/20 rounded-[3rem] blur-2xl opacity-50 group-hover:opacity-100 transition duration-1000"></div>
-              <div className="relative bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-3xl rounded-[3rem] p-12 lg:p-20 text-center space-y-8">
-                <div className="w-24 h-24 bg-gradient-to-br from-primary to-emerald-600 rounded-3xl mx-auto flex items-center justify-center shadow-2xl shadow-primary/20 transform group-hover:scale-110 transition-transform duration-500">
-                  <Smartphone className="w-12 h-12 text-white" />
+              <div className="absolute -inset-1 bg-gradient-to-r from-primary/10 to-emerald-500/10 rounded-[2rem] blur-xl opacity-40"></div>
+              <div className="relative bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-xl rounded-[2rem] p-6 sm:p-8 text-center space-y-6">
+                <div className="w-16 h-16 bg-gradient-to-br from-primary to-emerald-600 rounded-2xl mx-auto flex items-center justify-center shadow-xl shadow-primary/20">
+                  <Smartphone className="w-8 h-8 text-white" />
                 </div>
-                <div className="max-w-md mx-auto space-y-4">
-                  <h2 className="text-3xl font-black tracking-tight">Configure sua Conexão</h2>
-                  <p className="text-zinc-500 font-medium leading-relaxed">
-                    Para começar a automatizar suas mensagens, você precisa vincular sua conta do WhatsApp ao MOTA-FLOW. É rápido, seguro e criptografado.
+                <div className="space-y-3">
+                  <h2 className="text-xl font-black tracking-tight">Configure sua Conexão</h2>
+                  <p className="text-zinc-500 text-sm font-medium leading-relaxed max-w-xs mx-auto">
+                    Vincule seu WhatsApp ao MOTA-FLOW para começar a automatizar.
                   </p>
                 </div>
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+                <div className="flex flex-col gap-3 pt-2">
                   <button 
                     onClick={() => { setConnectMethod('qr'); setShowConnectModal(true); }}
-                    className="w-full sm:w-auto px-10 py-5 bg-white text-black rounded-2xl font-black text-sm hover:bg-zinc-200 transition-all flex items-center justify-center gap-2"
+                    className="w-full py-4 bg-white text-black rounded-xl font-black text-sm hover:bg-zinc-200 transition-all flex items-center justify-center gap-2 active:scale-95"
                   >
-                    <Zap className="w-5 h-5" /> Conectar via QR Code
+                    <Zap className="w-4 h-4" /> Conectar via QR Code
                   </button>
                   <button 
                     onClick={() => { setConnectMethod('pairing'); setShowConnectModal(true); }}
-                    className="w-full sm:w-auto px-10 py-5 bg-zinc-800/50 text-white rounded-2xl font-black text-sm border border-zinc-700 hover:bg-zinc-800 transition-all flex items-center justify-center gap-2"
+                    className="w-full py-4 bg-zinc-800/50 text-white rounded-xl font-black text-sm border border-zinc-700 hover:bg-zinc-800 transition-all flex items-center justify-center gap-2 active:scale-95"
                   >
-                    <Smartphone className="w-5 h-5" /> Conectar via Número
+                    <Smartphone className="w-4 h-4" /> Conectar via Número
                   </button>
                 </div>
               </div>
             </div>
           ) : instance.status === 'connecting' ? (
-            /* TELA DE CONEXÃO ATIVA */
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-8 duration-1000">
-              <div className="bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-3xl rounded-[3rem] p-10 space-y-8">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary">
-                    <Smartphone className="w-6 h-6" />
+            <div className="space-y-5 animate-in fade-in slide-in-from-bottom duration-700">
+              <div className="bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-xl rounded-[2rem] p-5 space-y-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+                    <Smartphone className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-black">Vincular Dispositivo</h3>
-                    <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Escolha o método preferido</p>
+                    <h3 className="text-lg font-black">Vincular Dispositivo</h3>
+                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Escolha o método</p>
                   </div>
                 </div>
 
-                <div className="flex p-1 bg-black/40 rounded-2xl border border-zinc-800/50">
+                <div className="flex p-1 bg-black/40 rounded-xl border border-zinc-800/50">
                   <button 
                     onClick={() => setConnectMethod('qr')}
-                    className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${connectMethod === 'qr' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
+                    className={`flex-1 py-2.5 rounded-lg text-xs font-black transition-all ${connectMethod === 'qr' ? 'bg-zinc-800 text-white' : 'text-zinc-500'}`}
                   >
                     QR CODE
                   </button>
                   <button 
                     onClick={() => setConnectMethod('pairing')}
-                    className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${connectMethod === 'pairing' ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
+                    className={`flex-1 py-2.5 rounded-lg text-xs font-black transition-all ${connectMethod === 'pairing' ? 'bg-zinc-800 text-white' : 'text-zinc-500'}`}
                   >
-                    NÚMERO DE TELEFONE
+                    NÚMERO
                   </button>
                 </div>
 
-                <div className="space-y-6">
+                <div className="space-y-5">
                   {connectMethod === 'qr' ? (
-                    <div className="space-y-6">
-                      <div className="relative aspect-square max-w-[280px] mx-auto bg-white p-6 rounded-[2.5rem] shadow-2xl shadow-primary/10 group">
+                    <div className="space-y-4">
+                      <div className="relative aspect-square max-w-[220px] mx-auto bg-white p-4 rounded-2xl shadow-xl shadow-primary/10">
                         {instance.qrCode ? (
                           <img src={instance.qrCode} alt="QR Code" className="w-full h-full object-contain" />
                         ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center gap-4">
-                            <RefreshCw className="w-10 h-10 text-zinc-200 animate-spin" />
-                            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Gerando Código...</p>
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-3">
+                            <RefreshCw className="w-8 h-8 text-zinc-300 animate-spin" />
+                            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Gerando...</p>
                           </div>
                         )}
-                        <div className="absolute inset-0 border-4 border-primary/20 rounded-[2.5rem] group-hover:border-primary/40 transition-colors pointer-events-none"></div>
                       </div>
                       <p className="text-center text-sm text-zinc-500 font-medium">
-                        Abra o WhatsApp {'>'} Configurações {'>'} Aparelhos Conectados
+                        WhatsApp {'>'} Aparelhos Conectados
                       </p>
                     </div>
                   ) : (
-                    <div className="space-y-6">
+                    <div className="space-y-5">
                       {instance.pairingCode ? (
-                        <div className="space-y-8 text-center py-4">
-                          <div className="space-y-2">
-                            <p className="text-xs font-black text-primary uppercase tracking-widest">Seu Código de Acesso</p>
-                            <div className="flex items-center justify-center gap-3">
-                              <span className="text-5xl font-black tracking-[0.2em] text-white font-mono">{instance.pairingCode}</span>
-                              <button 
-                                onClick={() => copyToClipboard(instance.pairingCode!)}
-                                className="p-3 bg-zinc-800 hover:bg-zinc-700 rounded-2xl transition-all"
-                              >
-                                {copied ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <Copy className="w-5 h-5" />}
-                              </button>
-                            </div>
+                        <div className="space-y-6 text-center py-3">
+                          <p className="text-xs font-black text-primary uppercase tracking-widest">Código de Acesso</p>
+                          <div className="flex items-center justify-center gap-3">
+                            <span className="text-4xl font-black tracking-[0.15em] text-white font-mono">{instance.pairingCode}</span>
+                            <button 
+                              onClick={() => copyToClipboard(instance.pairingCode!)}
+                              className="p-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl transition-all"
+                            >
+                              {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                            </button>
                           </div>
-                          <div className="bg-black/40 p-6 rounded-3xl border border-zinc-800/50 text-left space-y-3">
-                            <p className="text-xs font-black text-zinc-400 uppercase tracking-widest">Como usar:</p>
-                            <ol className="text-sm text-zinc-300 space-y-2 font-medium list-decimal list-inside">
-                              <li>Abra o WhatsApp no seu celular</li>
+                          <div className="bg-black/30 p-4 rounded-xl border border-zinc-800/50 text-left space-y-2">
+                            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Como usar:</p>
+                            <ol className="text-sm text-zinc-300 space-y-1.5 font-medium list-decimal list-inside">
+                              <li>Abra o WhatsApp</li>
                               <li>Vá em Aparelhos Conectados</li>
-                              <li>Clique em Conectar com número de telefone</li>
-                              <li>Digite o código acima no seu celular</li>
+                              <li>Conectar com número</li>
+                              <li>Digite o código</li>
                             </ol>
                           </div>
                         </div>
                       ) : (
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <label className="text-xs font-black text-zinc-500 uppercase tracking-widest ml-1">Número do WhatsApp</label>
-                            <input 
-                              type="text" 
-                              placeholder="Ex: 5591988887777"
-                              value={phoneNumber}
-                              onChange={(e) => setPhoneNumber(e.target.value)}
-                              className="w-full px-6 py-5 bg-black/40 border border-zinc-800 rounded-2xl font-black focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none"
-                            />
-                          </div>
+                        <div className="space-y-3">
+                          <input 
+                            type="tel" 
+                            placeholder="Ex: 5591988887777"
+                            value={phoneNumber}
+                            onChange={(e) => setPhoneNumber(e.target.value)}
+                            className="w-full px-5 py-4 bg-black/40 border border-zinc-800 rounded-xl font-bold focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all outline-none text-base"
+                          />
                           <button 
                             onClick={() => handleConnect(true)}
                             disabled={isConnecting}
-                            className="w-full py-5 bg-primary text-white rounded-2xl font-black text-sm shadow-xl shadow-primary/20 hover:opacity-90 transition-all flex items-center justify-center gap-2"
+                            className="w-full py-4 bg-primary text-white rounded-xl font-black text-sm shadow-lg shadow-primary/20 hover:opacity-90 transition-all flex items-center justify-center gap-2 active:scale-95"
                           >
                             {isConnecting ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
-                            Gerar Código de Acesso
+                            Gerar Código
                           </button>
                         </div>
                       )}
@@ -407,83 +389,70 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="space-y-6">
-                <div className="bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-3xl rounded-[3rem] p-10">
-                  <h3 className="text-xl font-black mb-6">Status da Instância</h3>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between p-4 bg-black/20 rounded-2xl border border-zinc-800/30">
-                      <span className="text-zinc-500 text-sm font-medium">Estado Atual</span>
-                      <span className="flex items-center gap-2 text-primary font-black text-xs uppercase tracking-widest">
-                        <span className="w-2 h-2 bg-primary rounded-full animate-ping"></span>
-                        Aguardando...
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between p-4 bg-black/20 rounded-2xl border border-zinc-800/30">
-                      <span className="text-zinc-500 text-sm font-medium">Segurança</span>
-                      <span className="flex items-center gap-2 text-emerald-500 font-black text-xs uppercase tracking-widest">
-                        <ShieldCheck className="w-4 h-4" />
-                        Ativa
-                      </span>
-                    </div>
+              <div className="bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-xl rounded-[2rem] p-5">
+                <h3 className="text-base font-black mb-4">Status</h3>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between px-3 py-3 bg-black/20 rounded-xl border border-zinc-800/30">
+                    <span className="text-zinc-500 text-sm font-medium">Estado</span>
+                    <span className="flex items-center gap-2 text-primary font-black text-[10px] uppercase tracking-widest">
+                      <span className="w-2 h-2 bg-primary rounded-full animate-ping"></span>
+                      Aguardando...
+                    </span>
                   </div>
-                </div>
-                
-                <div className="bg-gradient-to-br from-primary/10 to-emerald-500/10 border border-primary/20 rounded-[3rem] p-10 relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform duration-700">
-                    <MessageSquare className="w-32 h-32 text-primary" />
-                  </div>
-                  <div className="relative space-y-4">
-                    <h4 className="text-lg font-black">Dica de Especialista</h4>
-                    <p className="text-zinc-400 text-sm font-medium leading-relaxed">
-                      Mantenha seu celular conectado à internet para garantir que o robô responda instantaneamente. O MOTA-FLOW processa tudo em tempo real.
-                    </p>
+                  <div className="flex items-center justify-between px-3 py-3 bg-black/20 rounded-xl border border-zinc-800/30">
+                    <span className="text-zinc-500 text-sm font-medium">Segurança</span>
+                    <span className="flex items-center gap-2 text-emerald-500 font-black text-[10px] uppercase tracking-widest">
+                      <ShieldCheck className="w-3 h-3" />
+                      Ativa
+                    </span>
                   </div>
                 </div>
               </div>
             </div>
           ) : (
-            /* TELA DE CONECTADO - DASHBOARD REAL */
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-1000">
-              <div className="bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-3xl rounded-[2.5rem] p-8 space-y-4">
-                <div className="w-12 h-12 bg-emerald-500/10 rounded-2xl flex items-center justify-center text-emerald-500">
-                  <CheckCircle2 className="w-6 h-6" />
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom duration-700">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-xl rounded-2xl p-5 space-y-3">
+                  <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">Número Ativo</p>
+                    <h3 className="text-lg font-black">+{instance.phoneNumber}</h3>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-zinc-500 text-xs font-black uppercase tracking-widest">Número Ativo</p>
-                  <h3 className="text-2xl font-black">+{instance.phoneNumber}</h3>
+
+                <div className="bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-xl rounded-2xl p-5 space-y-3">
+                  <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+                    <Zap className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">Respostas</p>
+                    <h3 className="text-lg font-black">1.240</h3>
+                  </div>
+                </div>
+
+                <div className="bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-xl rounded-2xl p-5 space-y-3">
+                  <div className="w-10 h-10 bg-zinc-800 rounded-xl flex items-center justify-center text-zinc-400">
+                    <History className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">Atividade</p>
+                    <h3 className="text-lg font-black">Agora</h3>
+                  </div>
                 </div>
               </div>
 
-              <div className="bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-3xl rounded-[2.5rem] p-8 space-y-4">
-                <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary">
-                  <Zap className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-zinc-500 text-xs font-black uppercase tracking-widest">Total de Respostas</p>
-                  <h3 className="text-2xl font-black">1.240</h3>
-                </div>
-              </div>
-
-              <div className="bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-3xl rounded-[2.5rem] p-8 space-y-4">
-                <div className="w-12 h-12 bg-zinc-800 rounded-2xl flex items-center justify-center text-zinc-400">
-                  <History className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-zinc-500 text-xs font-black uppercase tracking-widest">Última Atividade</p>
-                  <h3 className="text-2xl font-black">Agora mesmo</h3>
-                </div>
-              </div>
-
-              <div className="md:col-span-3 bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-3xl rounded-[3rem] p-10 flex flex-col md:flex-row items-center justify-between gap-8">
-                <div className="space-y-2 text-center md:text-left">
-                  <h3 className="text-2xl font-black">Tudo pronto para escalar!</h3>
-                  <p className="text-zinc-500 font-medium">Seu WhatsApp está conectado e os fluxos estão operando 24/7.</p>
+              <div className="bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-xl rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="space-y-1 text-center sm:text-left">
+                  <h3 className="text-lg font-black">Tudo pronto!</h3>
+                  <p className="text-zinc-500 text-sm font-medium">Seu WhatsApp está conectado 24/7.</p>
                 </div>
                 <button 
                   onClick={() => navigate('/flows')}
-                  className="px-10 py-5 bg-white text-black rounded-2xl font-black text-sm hover:bg-zinc-200 transition-all flex items-center gap-2"
+                  className="w-full sm:w-auto px-8 py-3 bg-white text-black rounded-xl font-black text-sm hover:bg-zinc-200 transition-all flex items-center justify-center gap-2 active:scale-95"
                 >
-                  Ver Meus Fluxos <ArrowRight className="w-5 h-5" />
+                  Ver Meus Fluxos <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
             </div>

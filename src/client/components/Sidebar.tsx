@@ -32,10 +32,11 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Botão Hambúrguer */}
+      {/* Botão Hambúrguer - Otimizado para mobile */}
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="lg:hidden fixed top-4 right-4 z-[110] p-2.5 bg-primary/90 backdrop-blur-sm text-white rounded-xl shadow-lg shadow-primary/30 hover:bg-primary hover:scale-105 active:scale-95 transition-all"
+        className="lg:hidden fixed top-3 right-3 z-[110] p-2 bg-primary/90 backdrop-blur-sm text-white rounded-lg shadow-lg shadow-primary/30 hover:bg-primary active:scale-95 transition-all"
+        aria-label="Menu"
       >
         {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
       </button>
@@ -43,31 +44,31 @@ export default function Sidebar() {
       {/* Overlay */}
       {isOpen && (
         <div 
-          className="lg:hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] animate-in fade-in duration-300"
+          className="lg:hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-[100]"
           onClick={() => setIsOpen(false)}
         ></div>
       )}
 
-      {/* Sidebar - Fixa na Esquerda em Desktop, Direita em Mobile */}
+      {/* Sidebar */}
       <aside className={`
-        fixed top-0 bottom-0 z-[105] w-72 bg-zinc-950 border-l border-zinc-900 transition-all duration-500 ease-in-out
-        ${isOpen ? 'right-0' : '-right-full lg:right-auto lg:left-0'} 
+        fixed top-0 bottom-0 z-[105] w-64 bg-zinc-950 border-l border-zinc-900 transition-all duration-300 ease-in-out
+        ${isOpen ? 'right-0' : '-right-full lg:right-auto lg:left-0 lg:w-64'} 
         lg:border-r lg:border-l-0
       `}>
-        <div className="flex flex-col h-full p-8">
-          {/* Logo */}
-          <div className="flex items-center gap-3 mb-12 px-2">
-            <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
-              <Zap className="w-7 h-7 text-white" />
+        <div className="flex flex-col h-full p-5">
+          {/* Logo - Compacto */}
+          <div className="flex items-center gap-3 mb-8 px-1">
+            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
+              <Zap className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-black tracking-tighter text-white">MOTA-FLOW</h2>
-              <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">Automação</span>
+              <h2 className="text-xl font-black tracking-tighter text-white">MOTA-FLOW</h2>
+              <span className="text-[9px] font-black text-primary uppercase tracking-[0.2em]">Automação</span>
             </div>
           </div>
 
           {/* Menu */}
-          <nav className="flex-1 space-y-2">
+          <nav className="flex-1 space-y-1">
             {menuItems.map((item) => {
               const isActive = location.pathname === item.path
               return (
@@ -78,9 +79,9 @@ export default function Sidebar() {
                     setIsOpen(false)
                   }}
                   className={`
-                    w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold transition-all duration-300
+                    w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all duration-200 active:scale-95
                     ${isActive 
-                      ? 'bg-primary text-white shadow-lg shadow-primary/20 scale-[1.02]' 
+                      ? 'bg-primary text-white shadow-lg shadow-primary/20' 
                       : 'text-zinc-500 hover:text-white hover:bg-zinc-900'}
                   `}
                 >
@@ -91,27 +92,27 @@ export default function Sidebar() {
             })}
           </nav>
 
-          {/* Footer Sidebar - Limpo */}
-          <div className="pt-8 border-t border-zinc-900">
-            <div className="flex items-center gap-4 px-4 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-zinc-900 flex items-center justify-center overflow-hidden border border-zinc-800">
+          {/* Footer Sidebar */}
+          <div className="pt-4 border-t border-zinc-900">
+            <div className="flex items-center gap-3 px-3 mb-4">
+              <div className="w-9 h-9 rounded-lg bg-zinc-900 flex items-center justify-center overflow-hidden border border-zinc-800">
                 {profileImage ? (
                   <img src={profileImage} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-primary/10">
-                    <span className="text-primary font-black text-sm">{user.name?.[0]}</span>
+                    <span className="text-primary font-black text-xs">{user.name?.[0]}</span>
                   </div>
                 )}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-black text-white truncate">{user.name}</p>
-                <p className="text-[10px] font-bold text-zinc-500 truncate uppercase tracking-widest">Usuário Ativo</p>
+                <p className="text-[9px] font-bold text-zinc-500 truncate uppercase tracking-widest">Ativo</p>
               </div>
             </div>
             
             <button 
               onClick={handleLogout}
-              className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold text-destructive hover:bg-destructive/10 transition-all"
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-red-500 hover:bg-red-500/10 transition-all active:scale-95"
             >
               <LogOut className="w-5 h-5" />
               Sair

@@ -38,7 +38,7 @@ export default function Pairing() {
       if (response.ok) {
         setCode(data.code)
         addLog('Código gerado com sucesso!')
-        toast.success('Código gerado! Insira-o no seu WhatsApp.')
+        toast.success('Código gerado!')
       } else {
         toast.error(data.message || 'Erro ao gerar código')
         addLog(`Erro: ${data.message}`)
@@ -60,7 +60,6 @@ export default function Pairing() {
     }
   }
 
-  // Polling para verificar status da conexão
   useEffect(() => {
     if (!code) return
 
@@ -71,8 +70,8 @@ export default function Pairing() {
         })
         const data = await response.json()
         if (data.instance?.status === 'connected') {
-          addLog('✅ WhatsApp conectado!')
-          toast.success('WhatsApp conectado com sucesso!')
+          addLog('WhatsApp conectado!')
+          toast.success('WhatsApp conectado!')
           setTimeout(() => navigate('/dashboard'), 2000)
         }
       } catch (e) {}
@@ -82,69 +81,67 @@ export default function Pairing() {
   }, [code, navigate])
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 transition-colors duration-300">
-      <div className="max-w-md mx-auto space-y-6">
+    <div className="min-h-screen bg-[#0a0a0a] text-zinc-100 p-4 transition-colors duration-300 safe-top safe-bottom">
+      <div className="max-w-md mx-auto space-y-5">
         <div className="flex justify-between items-center">
           <button 
             onClick={() => navigate('/dashboard')}
-            className="p-2 hover:bg-white dark:hover:bg-slate-900 rounded-full transition-all shadow-sm"
+            className="p-2 hover:bg-zinc-800 rounded-lg transition-all"
           >
-            <ArrowLeft className="w-6 h-6 text-slate-600 dark:text-slate-400" />
+            <ArrowLeft className="w-5 h-5 text-zinc-400" />
           </button>
-
         </div>
 
-        <div className="glass-card p-8 space-y-6 text-center">
-          <div className="w-20 h-20 bg-green-500/10 rounded-3xl flex items-center justify-center mx-auto mb-4">
-            <Phone className="w-10 h-10 text-whatsapp" />
+        <div className="glass-card p-6 space-y-5 text-center">
+          <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-3">
+            <Phone className="w-8 h-8 text-primary" />
           </div>
           
-          <h1 className="text-2xl font-bold gradient-text-whatsapp">Conectar via Número</h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm">
-            Receba um código de 8 dígitos para conectar seu WhatsApp sem precisar escanear o QR Code.
+          <h1 className="text-xl font-black gradient-text-whatsapp">Conectar via Número</h1>
+          <p className="text-zinc-500 text-sm">
+            Receba um código de 8 dígitos para conectar seu WhatsApp.
           </p>
 
           {!code ? (
-            <div className="space-y-4">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Ex: 5511999999999"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
-                  className="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-2xl py-4 px-6 focus:ring-2 focus:ring-whatsapp transition-all text-center text-lg font-medium"
-                />
-              </div>
+            <div className="space-y-3">
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="5511999999999"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
+                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-3.5 px-4 focus:border-primary focus:ring-1 focus:ring-primary transition-all text-center text-lg font-bold outline-none"
+              />
               <button
                 onClick={handleRequestCode}
                 disabled={loading}
-                className="btn-touch w-full bg-whatsapp text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-green-500/20 disabled:opacity-50"
+                className="btn-touch w-full bg-primary text-white py-3.5 rounded-xl font-black flex items-center justify-center gap-2 shadow-lg shadow-primary/20 disabled:opacity-50 active:scale-95 transition-all"
               >
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Gerar Código de Conexão'}
+                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Gerar Código'}
               </button>
             </div>
           ) : (
-            <div className="space-y-6 animate-in fade-in zoom-in duration-300">
-              <div className="bg-slate-100 dark:bg-slate-900 p-6 rounded-3xl border-2 border-dashed border-whatsapp/30">
-                <span className="text-4xl font-mono font-black tracking-widest text-whatsapp block mb-4">
+            <div className="space-y-5 animate-in fade-in zoom-in duration-300">
+              <div className="bg-zinc-900/50 p-5 rounded-2xl border-2 border-dashed border-primary/30">
+                <span className="text-3xl font-mono font-black tracking-widest text-primary block mb-4">
                   {code}
                 </span>
                 <button
                   onClick={copyToClipboard}
-                  className="flex items-center gap-2 mx-auto text-sm font-bold text-whatsapp hover:opacity-80 transition-all"
+                  className="flex items-center gap-2 mx-auto text-sm font-bold text-primary hover:opacity-80 transition-all active:scale-95"
                 >
                   {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   {copied ? 'COPIADO!' : 'COPIAR CÓDIGO'}
                 </button>
               </div>
 
-              <div className="text-left space-y-3">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Passo a passo:</p>
-                <ol className="text-sm text-slate-600 dark:text-slate-400 space-y-2 list-decimal list-inside">
-                  <li>Abra o WhatsApp no seu celular</li>
+              <div className="text-left space-y-2">
+                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Passo a passo:</p>
+                <ol className="text-sm text-zinc-400 space-y-1.5 list-decimal list-inside">
+                  <li>Abra o WhatsApp no celular</li>
                   <li>Vá em <b>Aparelhos Conectados</b></li>
                   <li>Toque em <b>Conectar um aparelho</b></li>
-                  <li>Toque em <b>Conectar com número de telefone</b></li>
+                  <li>Toque em <b>Conectar com número</b></li>
                   <li>Insira o código acima</li>
                 </ol>
               </div>
@@ -152,19 +149,19 @@ export default function Pairing() {
           )}
         </div>
 
-        {/* Logs em Tempo Real */}
-        <div className="glass-card p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Logs da Instância</h2>
+        {/* Logs */}
+        <div className="glass-card p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
+            <h2 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Logs</h2>
           </div>
-          <div className="space-y-2 font-mono text-[10px] text-slate-500 dark:text-slate-400 h-32 overflow-y-auto">
+          <div className="space-y-1 font-mono text-[10px] text-zinc-500 h-24 overflow-y-auto">
             {logs.length > 0 ? logs.map((log, i) => (
-              <div key={i} className="border-l-2 border-slate-200 dark:border-slate-800 pl-3 py-1">
+              <div key={i} className="border-l-2 border-zinc-800 pl-2 py-0.5">
                 {log}
               </div>
             )) : (
-              <p className="italic">Aguardando atividades...</p>
+              <p className="italic">Aguardando...</p>
             )}
           </div>
         </div>
