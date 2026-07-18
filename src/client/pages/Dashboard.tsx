@@ -1,8 +1,23 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { LogOut, Plus, Edit2, Trash2, RefreshCw, Wifi, Smartphone, QrCode, ExternalLink, X, Check, AlertTriangle, Phone } from 'lucide-react'
-import ThemeToggle from '../components/ThemeToggle'
+import { 
+  Plus, 
+  Edit2, 
+  Trash2, 
+  RefreshCw, 
+  Wifi, 
+  Smartphone, 
+  QrCode, 
+  ExternalLink, 
+  X, 
+  Check, 
+  Phone,
+  Zap,
+  MessageSquare,
+  ChevronRight
+} from 'lucide-react'
+import Sidebar from '../components/Sidebar'
 
 interface WhatsappInstance {
   id: number
@@ -45,7 +60,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadData()
-    // Aumentar a frequência de busca quando estiver conectando para o QR aparecer mais rápido
     const intervalTime = (instance?.status === 'connecting') ? 2000 : 5000;
     const interval = setInterval(loadData, intervalTime)
     return () => clearInterval(interval)
@@ -97,12 +111,6 @@ export default function Dashboard() {
     } finally {
       setIsLoading(false)
     }
-  }
-
-  const handleLogout = () => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    navigate('/login')
   }
 
   const handleConnect = async (usePairingCode = false) => {
@@ -184,190 +192,198 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background gradient-bg pb-20">
-      <header className="header-sticky px-6 py-4 bg-background/80 backdrop-blur-md border-b border-border">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="bg-primary p-2 rounded-xl shadow-lg shadow-primary/20">
-              <Wifi className="w-6 h-6 text-white" />
+    <div className="min-h-screen bg-background flex">
+      <Sidebar />
+      
+      <main className="flex-1 lg:ml-72 p-6 lg:p-12 transition-all duration-500">
+        <div className="max-w-6xl mx-auto space-y-12">
+          {/* Header Section */}
+          <header className="space-y-2">
+            <div className="flex items-center gap-2 text-primary font-black text-xs uppercase tracking-widest">
+              <Zap className="w-4 h-4" />
+              <span>Visão Geral</span>
             </div>
-            <h1 className="text-2xl font-black gradient-text-whatsapp">MOTA-FLOW</h1>
-          </div>
-          <div className="flex items-center gap-4">
-            <ThemeToggle />
-            <button onClick={handleLogout} className="flex items-center gap-2 px-4 py-2 text-muted-foreground hover:text-destructive transition-all font-bold">
-              <LogOut className="w-5 h-5" />
-              <span className="hidden sm:inline">Sair</span>
-            </button>
-          </div>
-        </div>
-      </header>
+            <h1 className="text-4xl font-black tracking-tighter">Painel de Controle</h1>
+            <p className="text-muted-foreground font-medium">Monitore sua conexão e gerencie suas automações.</p>
+          </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-10 space-y-12">
-        {/* WhatsApp Connection Section */}
-        <section>
-          <div className="flex items-center gap-2 mb-8">
-            <div className="w-2 h-8 bg-primary rounded-full"></div>
-            <h2 className="text-2xl font-black">Conexão WhatsApp</h2>
-          </div>
-
-          <div className="glass-card rounded-[2.5rem] p-8 sm:p-12 overflow-hidden relative">
-            {instance?.status === 'connected' ? (
-              <div className="flex flex-col md:flex-row items-center justify-between gap-8">
-                <div className="flex items-center gap-6">
-                  <div className="w-20 h-20 bg-whatsapp/20 rounded-3xl flex items-center justify-center shadow-inner">
-                    <Check className="w-10 h-10 text-whatsapp animate-bounce" />
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-black text-whatsapp mb-1">WhatsApp Conectado</h3>
-                    <p className="text-muted-foreground font-medium">Sua automação está operando normalmente.</p>
-                  </div>
-                </div>
-                <button onClick={handleDisconnect} className="px-8 py-4 bg-destructive/10 text-destructive rounded-2xl font-bold hover:bg-destructive hover:text-white transition-all btn-touch">
-                  Desconectar WhatsApp
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-                {/* QR Code Option */}
-                <div className="flex flex-col items-center text-center p-8 bg-muted/30 rounded-[2rem] border border-border/50 relative group">
-                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-all">
-                    <QrCode className="w-24 h-24" />
-                  </div>
-                  <h3 className="text-xl font-black mb-6 flex items-center gap-2">
-                    <QrCode className="w-6 h-6 text-primary" /> Opção 1: QR Code
-                  </h3>
-                  <div className="bg-white p-4 rounded-3xl shadow-xl mb-8 min-h-[224px] flex items-center justify-center">
-                    {instance?.qrCode ? (
-                      <img src={instance.qrCode} alt="QR Code" className="w-48 h-48" />
-                    ) : (
-                      <div className="flex flex-col items-center gap-3">
-                        <RefreshCw className="w-8 h-8 text-primary animate-spin" />
-                        <p className="text-xs font-bold text-muted-foreground uppercase">Gerando QR...</p>
+          {/* Connection Status Card */}
+          <section>
+            <div className="glass-card rounded-[2.5rem] p-8 sm:p-12 overflow-hidden relative border border-border/50">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -mr-32 -mt-32 blur-3xl"></div>
+              
+              {instance?.status === 'connected' ? (
+                <div className="flex flex-col md:flex-row items-center justify-between gap-8 relative z-10">
+                  <div className="flex items-center gap-6">
+                    <div className="w-24 h-24 bg-whatsapp/20 rounded-[2rem] flex items-center justify-center shadow-inner border border-whatsapp/20">
+                      <Wifi className="w-12 h-12 text-whatsapp animate-pulse" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="w-2 h-2 bg-whatsapp rounded-full animate-ping"></span>
+                        <h3 className="text-2xl font-black text-whatsapp">Conectado</h3>
                       </div>
-                    )}
+                      <p className="text-muted-foreground font-medium">Sua instância está ativa e respondendo.</p>
+                      <p className="text-xs font-bold mt-2 py-1 px-3 bg-muted rounded-full inline-block">Número: {instance.phoneNumber || 'N/A'}</p>
+                    </div>
                   </div>
-                  <button onClick={() => { setShowConnectionScreen(true); setConnectionMethod('qr'); setConnectionActive(true); }} className="w-full btn-primary py-4 flex items-center justify-center gap-2">
-                    <RefreshCw className="w-5 h-5" /> Ampliar QR Code
+                  <button onClick={handleDisconnect} className="px-10 py-5 bg-destructive/10 text-destructive rounded-2xl font-black text-lg hover:bg-destructive hover:text-white transition-all btn-touch shadow-xl shadow-destructive/10">
+                    Desconectar Instância
                   </button>
                 </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 relative z-10">
+                  {/* QR Code Option */}
+                  <div className="flex flex-col items-center text-center p-8 bg-muted/30 rounded-[2.5rem] border border-border/50 group hover:border-primary/30 transition-all duration-500">
+                    <h3 className="text-xl font-black mb-6 flex items-center gap-2">
+                      <QrCode className="w-6 h-6 text-primary" /> Conectar via QR Code
+                    </h3>
+                    <div className="bg-white p-5 rounded-[2rem] shadow-2xl mb-8 min-h-[224px] flex items-center justify-center border-4 border-muted">
+                      {instance?.qrCode ? (
+                        <img src={instance.qrCode} alt="QR Code" className="w-48 h-48" />
+                      ) : (
+                        <div className="flex flex-col items-center gap-3">
+                          <RefreshCw className="w-10 h-10 text-primary animate-spin" />
+                          <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">Gerando QR Code...</p>
+                        </div>
+                      )}
+                    </div>
+                    <button 
+                      onClick={() => { setShowConnectionScreen(true); setConnectionMethod('qr'); setConnectionActive(true); }} 
+                      className="w-full btn-primary py-5 text-lg font-black"
+                    >
+                      Ampliar QR Code
+                    </button>
+                  </div>
 
-                {/* Pairing Code Option */}
-                <div className="flex flex-col items-center text-center p-8 bg-muted/30 rounded-[2rem] border border-border/50 relative group">
-                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-all">
-                    <Smartphone className="w-24 h-24" />
+                  {/* Pairing Code Option */}
+                  <div className="flex flex-col items-center text-center p-8 bg-muted/30 rounded-[2.5rem] border border-border/50 group hover:border-whatsapp/30 transition-all duration-500">
+                    <h3 className="text-xl font-black mb-6 flex items-center gap-2">
+                      <Smartphone className="w-6 h-6 text-whatsapp" /> Conectar via Número
+                    </h3>
+                    <div className="w-full space-y-6 mb-8">
+                      <p className="text-sm text-muted-foreground font-medium">Digite o número do WhatsApp com DDD:</p>
+                      <div className="relative group">
+                        <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-muted-foreground group-focus-within:text-whatsapp transition-all" />
+                        <input
+                          type="text"
+                          value={phoneNumber}
+                          onChange={(e) => setPhoneNumber(e.target.value)}
+                          placeholder="Ex: 559185892191"
+                          className="w-full pl-14 pr-4 py-5 bg-background border border-border rounded-2xl text-center text-2xl font-black tracking-widest focus:ring-4 focus:ring-whatsapp/10 transition-all"
+                        />
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => handleConnect(true)} 
+                      disabled={isConnecting} 
+                      className="w-full py-5 bg-whatsapp text-white rounded-2xl font-black text-lg flex items-center justify-center gap-3 shadow-xl shadow-whatsapp/20 hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+                    >
+                      {isConnecting ? <RefreshCw className="w-6 h-6 animate-spin" /> : <Smartphone className="w-6 h-6" />}
+                      Gerar Código de Pareamento
+                    </button>
                   </div>
-                  <h3 className="text-xl font-black mb-6 flex items-center gap-2">
-                    <Smartphone className="w-6 h-6 text-primary" /> Opção 2: Via Número
-                  </h3>
-                  <div className="w-full space-y-6 mb-8">
-                    <p className="text-sm text-muted-foreground font-medium">Conecte digitando o número do seu WhatsApp abaixo:</p>
-                    <input
-                      type="text"
-                      value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value)}
-                      placeholder="Ex: 559185892191"
-                      className="w-full px-6 py-5 bg-background border border-border rounded-2xl text-center text-xl font-mono focus:ring-2 focus:ring-primary/20 transition-all"
-                    />
-                  </div>
-                  <button onClick={() => handleConnect(true)} disabled={isConnecting} className="w-full py-4 bg-whatsapp text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-whatsapp/20 hover:opacity-90 transition-all">
-                    {isConnecting ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Phone className="w-5 h-5" />}
-                    Gerar Código de 8 Dígitos
-                  </button>
                 </div>
+              )}
+            </div>
+          </section>
+
+          {/* Quick Access Section */}
+          <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="glass-card rounded-[2.5rem] p-8 border border-border/50 group hover:border-primary/30 transition-all duration-500 cursor-pointer" onClick={() => navigate('/flows')}>
+              <div className="flex items-center justify-between mb-6">
+                <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-all duration-500 shadow-inner">
+                  <MessageSquare className="w-8 h-8" />
+                </div>
+                <ChevronRight className="w-6 h-6 text-muted-foreground group-hover:translate-x-2 transition-all" />
               </div>
-            )}
-          </div>
-        </section>
-
-        {/* Flows Section */}
-        <section>
-          <div className="flex justify-between items-center mb-8">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-8 bg-primary rounded-full"></div>
-              <h2 className="text-2xl font-black">Meus Fluxos</h2>
+              <h3 className="text-2xl font-black mb-2">Gerenciar Fluxos</h3>
+              <p className="text-muted-foreground font-medium">Você tem {flows.length} fluxos configurados.</p>
             </div>
-            <button onClick={() => navigate('/flow-editor')} className="btn-primary px-6 py-3 flex items-center gap-2">
-              <Plus className="w-5 h-5" /> Novo Fluxo
-            </button>
-          </div>
 
-          {flows.length === 0 ? (
-            <div className="glass-card rounded-[2.5rem] p-16 text-center border-dashed border-2 border-primary/20">
-              <p className="text-muted-foreground text-lg mb-8">Você ainda não criou nenhum fluxo de atendimento.</p>
-              <button onClick={() => navigate('/flow-editor')} className="btn-secondary px-8 py-4">Criar Primeiro Fluxo</button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {flows.map(flow => (
-                <div key={flow.id} className="glass-card rounded-3xl p-6 card-hover group">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="bg-primary/10 p-3 rounded-2xl group-hover:bg-primary group-hover:text-white transition-all">
-                      <RefreshCw className="w-6 h-6" />
-                    </div>
-                    <div className="flex gap-1">
-                      <button onClick={() => navigate(`/flow-editor/${flow.id}`)} className="p-2 text-muted-foreground hover:text-primary transition-all"><Edit2 className="w-5 h-5" /></button>
-                      <button onClick={async () => { if(confirm('Deletar?')) { const token = localStorage.getItem('token'); await fetch(`/api/flows/${flow.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }); loadData(); } }} className="p-2 text-muted-foreground hover:text-destructive transition-all"><Trash2 className="w-5 h-5" /></button>
-                    </div>
-                  </div>
-                  <h3 className="text-xl font-black mb-2">{flow.name}</h3>
-                  <p className="text-muted-foreground text-sm line-clamp-2 mb-6">{flow.description || 'Sem descrição.'}</p>
-                  <div className="flex items-center justify-between pt-4 border-t border-border/50">
-                    <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{new Date(flow.createdAt).toLocaleDateString()}</span>
-                    <button onClick={() => navigate(`/flow-preview/${flow.id}`)} className="text-xs font-black text-primary flex items-center gap-1 uppercase tracking-tighter">Testar <ExternalLink className="w-3 h-3" /></button>
-                  </div>
+            <div className="glass-card rounded-[2.5rem] p-8 border border-border/50 group hover:border-primary/30 transition-all duration-500 cursor-pointer" onClick={() => navigate('/settings')}>
+              <div className="flex items-center justify-between mb-6">
+                <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-all duration-500 shadow-inner">
+                  <Zap className="w-8 h-8" />
                 </div>
-              ))}
+                <ChevronRight className="w-6 h-6 text-muted-foreground group-hover:translate-x-2 transition-all" />
+              </div>
+              <h3 className="text-2xl font-black mb-2">Configurações</h3>
+              <p className="text-muted-foreground font-medium">Ajuste seu perfil e segurança da conta.</p>
             </div>
-          )}
-        </section>
+          </section>
+        </div>
       </main>
 
-      {/* Connection Modal Overlay */}
+      {/* Connection Modal Overlay (Mantido para compatibilidade de fluxo) */}
       {showConnectionScreen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg glass-card rounded-[2.5rem] p-8 sm:p-12 relative shadow-2xl">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/95 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg glass-card rounded-[2.5rem] p-8 sm:p-12 relative shadow-2xl border border-border/50">
             <button onClick={() => { setShowConnectionScreen(false); setConnectionActive(false); }} className="absolute top-6 right-6 p-2 rounded-xl hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all">
-              <X className="w-6 h-6" />
+              <X className="w-8 h-8" />
             </button>
-
-            <div className="text-center mb-10">
-              <div className={`w-20 h-20 rounded-3xl mx-auto mb-6 flex items-center justify-center ${connectionError ? 'bg-red-500/20' : 'bg-primary/20'}`}>
-                {connectionError ? <AlertTriangle className="w-10 h-10 text-red-500" /> : progress >= 100 ? <Check className="w-10 h-10 text-green-500" /> : <RefreshCw className="w-10 h-10 text-primary animate-spin" />}
+            
+            <div className="text-center space-y-8">
+              <div className="w-20 h-20 bg-primary/10 rounded-3xl flex items-center justify-center mx-auto shadow-inner">
+                {connectionMethod === 'qr' ? <QrCode className="w-10 h-10 text-primary" /> : <Smartphone className="w-10 h-10 text-whatsapp" />}
               </div>
-              <h2 className="text-3xl font-black mb-2">{connectionError ? 'Erro na Conexão' : progress >= 100 ? 'Conectado!' : 'Conectando...'}</h2>
-              <p className="text-muted-foreground font-medium">{connectionMethod === 'qr' ? 'Escaneie o QR Code no seu WhatsApp' : 'Digite o código abaixo no seu celular'}</p>
-            </div>
-
-            {connectionMethod === 'qr' && instance?.qrCode && !connectionError && (
-              <div className="bg-white p-6 rounded-3xl mx-auto w-fit mb-10 shadow-xl border-8 border-white">
-                <img src={instance.qrCode} alt="QR Code" className="w-56 h-56" />
+              
+              <div>
+                <h2 className="text-3xl font-black tracking-tight">
+                  {connectionMethod === 'qr' ? 'Escaneie o QR Code' : 'Digite o Código'}
+                </h2>
+                <p className="text-muted-foreground font-medium mt-2">Siga as instruções no seu WhatsApp.</p>
               </div>
-            )}
 
-            {connectionMethod === 'pairing' && pairingCode && !connectionError && (
-              <div className="text-center mb-10">
-                <div className="text-5xl font-mono font-black text-primary tracking-[0.2em] bg-primary/5 py-8 rounded-3xl border-2 border-primary/20 inline-block px-8">
-                  {pairingCode}
+              {connectionMethod === 'qr' ? (
+                <div className="bg-white p-6 rounded-[2rem] shadow-2xl inline-block border-4 border-muted">
+                  {instance?.qrCode ? (
+                    <img src={instance.qrCode} alt="QR Code" className="w-56 h-56" />
+                  ) : (
+                    <div className="w-56 h-56 flex flex-col items-center justify-center gap-4">
+                      <RefreshCw className="w-12 h-12 text-primary animate-spin" />
+                      <p className="text-xs font-black text-muted-foreground uppercase">Gerando...</p>
+                    </div>
+                  )}
                 </div>
-                <p className="text-sm text-muted-foreground mt-4 font-bold uppercase tracking-widest">Código de 8 dígitos</p>
-              </div>
-            )}
+              ) : (
+                <div className="space-y-6">
+                  {pairingCode ? (
+                    <div className="bg-muted/50 p-8 rounded-[2rem] border-2 border-dashed border-whatsapp/30">
+                      <span className="text-5xl font-black tracking-[0.5em] text-whatsapp ml-4">{pairingCode}</span>
+                    </div>
+                  ) : (
+                    <div className="py-10">
+                      <RefreshCw className="w-12 h-12 text-whatsapp animate-spin mx-auto" />
+                      <p className="text-sm font-bold text-muted-foreground mt-4">Solicitando código...</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
-            {connectionError && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-3xl p-6 mb-10 text-center">
-                <p className="text-red-500 font-bold mb-4">{connectionError}</p>
-                <button onClick={() => { setShowConnectionScreen(false); setConnectionActive(false); }} className="px-8 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-all">Fechar e Tentar Novamente</button>
-              </div>
-            )}
-
-            <div className="bg-muted/50 rounded-3xl p-6 max-h-40 overflow-y-auto">
-              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-4">Logs em tempo real</p>
+              {/* Progress Bar */}
               <div className="space-y-3">
+                <div className="flex justify-between text-xs font-black uppercase tracking-widest text-muted-foreground">
+                  <span>Status da Conexão</span>
+                  <span>{progress}%</span>
+                </div>
+                <div className="w-full h-3 bg-muted rounded-full overflow-hidden shadow-inner">
+                  <div 
+                    className="h-full bg-primary transition-all duration-1000 ease-out rounded-full shadow-lg shadow-primary/30"
+                    style={{ width: `${progress}%` }}
+                  ></div>
+                </div>
+              </div>
+
+              {/* Terminal-like Logs */}
+              <div className="bg-black/90 rounded-2xl p-4 h-32 overflow-y-auto font-mono text-[10px] text-left border border-white/10 shadow-inner custom-scrollbar">
                 {logs.map((log, i) => (
-                  <div key={i} className="flex gap-3 text-xs font-medium">
-                    <span className="text-muted-foreground font-mono">{log.time}</span>
-                    <span className={log.status === 'success' ? 'text-green-500' : log.status === 'error' ? 'text-red-500' : 'text-foreground'}>{log.message}</span>
+                  <div key={i} className={`mb-1 ${
+                    log.status === 'success' ? 'text-whatsapp' : 
+                    log.status === 'error' ? 'text-destructive' : 
+                    log.status === 'warning' ? 'text-yellow-400' : 'text-primary/70'
+                  }`}>
+                    <span className="opacity-50">[{log.time}]</span> {log.message}
                   </div>
                 ))}
                 <div ref={logsEndRef} />

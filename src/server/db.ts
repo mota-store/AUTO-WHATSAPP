@@ -72,6 +72,14 @@ export async function getUserById(id: number) {
   return users[0]
 }
 
+export async function updateUserPassword(id: number, passwordHash: string) {
+  const database = await getDb()
+  await database
+    .update(schema.users)
+    .set({ passwordHash })
+    .where(eq(schema.users.id, id))
+}
+
 // WhatsApp Instance queries
 export async function createWhatsappInstance(userId: number) {
   const database = await getDb()

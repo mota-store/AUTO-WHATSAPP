@@ -131,6 +131,35 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
   }
 })
 
+app.post('/api/auth/update-password', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userPayload = (req as any).user as AuthPayload
+    const { currentPassword, newPassword } = req.body
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Ambas as senhas são obrigatórias' })
+    }
+
+    const user = await db.getUserById(userPayload.userId)
+    if (!user) {
+      return res.status(404).json({ message: 'Usuário não encontrado' })
+    }
+
+    const isPasswordValid = await verifyPassword(currentPassword, user.passwordHash)
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: 'Senha atual incorreta' })
+    }
+
+    const newPasswordHash = await hashPassword(newPassword)
+    await db.updateUserPassword(user.id, newPasswordHash)
+
+    res.json({ message: 'Senha atualizada com sucesso' })
+  } catch (error: any) {
+    console.error('[UPDATE PASSWORD ERROR]', error)
+    res.status(500).json({ message: 'Erro ao atualizar senha' })
+  }
+})
+
 // Dashboard Route
 app.get('/api/dashboard', authMiddleware, async (req: Request, res: Response) => {
   try {
