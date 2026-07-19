@@ -292,16 +292,31 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       const isLoggedOut = statusCode === DisconnectReason.loggedOut || 
                          statusCode === 401 || // Unauthorized
                          statusCode === 403 || // Forbidden
-                         statusCode === 440    // Session expired
+                         statusCode === 440 || // Session expired
+                         statusCode === DisconnectReason.connectionClosed || // Conexão fechada pelo usuário ou rede
+                         statusCode === DisconnectReason.timedOut    // Tempo limite excedido
 
       if (!isLoggedOut) {
         console.log(`[MOTA-FLOW] [User ${userId}] Tentando reconectar automaticamente...`)
-        setTimeout(() => {
-          // Verificar se ainda é a mesma sessão antes de reconectar
-          if (sessions.get(userId) === sock) {
+        // Tentar reconectar. Se falhar, o próximo 'close' tratará como desconectado.
+        // No entanto, para garantir que o dashboard reflita o estado rapidamente,
+        // vamos definir um timeout para atualizar para 'disconnected' se a reconexão não ocorrer.
+        setTimeout(async () => {
+          if (sessions.get(userId) === sock && sock.ws.readyState !== sock.ws.OPEN) {
+            console.log(`[MOTA-FLOW] [User ${userId}] Reconexão falhou ou não ocorreu. Atualizando status para desconectado.`)
+            await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null, pairingCode: null, phoneNumber: null })
+            sessions.delete(userId)
+            if (fs.existsSync(sessionPath)) {
+              try {
+                fs.rmSync(sessionPath, { recursive: true, force: true })
+              } catch (e) {}
+            }
+          } else if (sessions.get(userId) === sock) {
+            // Se ainda é a mesma sessão e está aberta, significa que reconectou com sucesso
+            console.log(`[MOTA-FLOW] [User ${userId}] Tentando reconectar automaticamente...`)
             connectToWhatsApp(userId, instanceId, reconnectPhone, true)
           }
-        }, 5000)
+        }, 10000) // Dar um tempo maior para a reconexão se estabelecer, senão desconecta
       } else {
         console.log(`[MOTA-FLOW] [User ${userId}] Logout detectado ou sessão encerrada permanentemente.`)
         await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null, pairingCode: null, phoneNumber: null })
