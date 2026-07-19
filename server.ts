@@ -600,7 +600,7 @@ app.post('/api/whatsapp/disconnect', authMiddleware, async (req: Request, res: R
 app.use(express.static(path.join(__dirname, 'client')))
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'client', 'index.html')))
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   db.syncSchema().then(() => {
     preloadBaileysVersion().then(() => {
       console.log(`🚀 [MOTA-FLOW] Porta ${PORT}`)
