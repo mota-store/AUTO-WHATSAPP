@@ -17,39 +17,27 @@ interface TutorialSlide {
 const tutorialSlides: TutorialSlide[] = [
   {
     title: '👋 Bem-vindo ao MOTA-FLOW',
-    description: 'Sua plataforma de automação WhatsApp está pronta para revolucionar seu atendimento. Vamos aprender o básico em 5 passos simples.',
+    description: 'Sua plataforma de automação WhatsApp está pronta. Vamos aprender a configurar tudo de forma rápida e simples.',
     image: slide1,
-    tips: ['Este é um tutorial interativo', 'Use as setas para navegar', 'Você pode fechar a qualquer momento']
+    tips: ['Tutorial 100% visual', 'Use os botões para navegar', 'Feche quando quiser']
   },
   {
-    title: '📱 Passo 1: Conectar WhatsApp',
-    description: 'Acesse o Dashboard e clique em "Conectar via QR Code" ou "Conectar via Número". Escaneie o código com seu celular ou use o código de pareamento.',
+    title: '📊 Dashboard Intuitivo',
+    description: 'Aqui você controla tudo. Veja o status da sua conexão e acesse seus fluxos de atendimento com um toque.',
     image: slide2,
-    tips: ['Mantenha seu celular próximo', 'O código expira em 60 segundos', 'Você pode reconectar a qualquer momento']
+    tips: ['Status em tempo real', 'Acesso rápido aos fluxos', 'Design otimizado para Android']
   },
   {
-    title: '🤖 Passo 2: Criar um Fluxo',
-    description: 'Vá para "Meus Fluxos" e clique em "Novo Fluxo". Um fluxo é uma sequência de mensagens automáticas que seu robô enviará.',
+    title: '⚙️ Configuração de Perfil',
+    description: 'Personalize seu robô! Altere o nome, avatar e gerencie sua conta de forma simplificada.',
     image: slide3,
-    tips: ['Comece com um fluxo simples', 'Você pode editar depois', 'Cada fluxo pode ter múltiplos níveis']
+    tips: ['Foto do robô personalizada', 'Dados sempre atualizados', 'Segurança em primeiro lugar']
   },
   {
-    title: '✏️ Passo 3: Editar Mensagens',
-    description: 'No editor, customize o título, a mensagem inicial e adicione opções numeradas. Cada opção pode levar a uma nova mensagem.',
+    title: '✏️ Editor de Fluxos',
+    description: 'Crie conversas inteligentes. Escreva as mensagens e defina as opções de resposta para seus clientes.',
     image: slide4,
-    tips: ['Use números para as opções (1, 2, 3...)', 'Adicione respostas automáticas', 'Crie sub-menus para aprofundar']
-  },
-  {
-    title: '⚡ Passo 4: Ativar o Fluxo',
-    description: 'Volte para "Meus Fluxos" e clique no ícone de energia para ativar seu fluxo. Apenas 1 fluxo pode estar ativo por vez.',
-    image: slide5,
-    tips: ['Fluxo ativo = robô respondendo', 'Você pode trocar de fluxo a qualquer hora', 'Desative para pausar o robô']
-  },
-  {
-    title: '🎉 Pronto! Você está Pronto!',
-    description: 'Seu robô agora está respondendo automaticamente no WhatsApp. Qualquer pessoa que enviar uma mensagem receberá suas respostas automáticas.',
-    image: slide6,
-    tips: ['Monitore as conversas', 'Ajuste os fluxos conforme necessário', 'Use o preview para testar antes de ativar']
+    tips: ['Interface enxuta', 'Fácil de editar no celular', 'Salve suas alterações na hora']
   }
 ]
 

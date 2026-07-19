@@ -279,71 +279,71 @@ export default function FlowEditor() {
     <div className="min-h-screen bg-background flex">
       <Sidebar />
       
-      <main className="flex-1 lg:ml-72 p-4 lg:p-8 transition-all duration-500">
-        <div className="max-w-6xl mx-auto space-y-6">
+      <main className="flex-1 lg:ml-72 p-3 lg:p-6 transition-all duration-500">
+        <div className="max-w-6xl mx-auto space-y-4">
           {/* Top Header */}
-          <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-[2rem] border border-border/50 shadow-sm">
+          <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 bg-card p-4 rounded-2xl border border-border/50 shadow-sm">
             <div className="flex items-center gap-4">
-              <button onClick={() => navigate('/flows')} className="p-3 hover:bg-muted rounded-2xl transition-all">
+              <button onClick={() => navigate('/flows')} className="p-2 hover:bg-muted rounded-lg transition-all">
                 <ChevronLeft className="w-6 h-6 text-muted-foreground" />
               </button>
               <div>
-                <h1 className="text-2xl font-black tracking-tight">{flowName || 'Novo Atendimento'}</h1>
-                <p className="text-xs font-bold text-primary uppercase tracking-widest">Editor de Mensagens</p>
+                <h1 className="text-lg font-black tracking-tight">{flowName || 'Novo Atendimento'}</h1>
+                <p className="text-[10px] font-bold text-primary uppercase tracking-widest">Editor</p>
               </div>
             </div>
-            <div className="flex gap-3 w-full sm:w-auto">
+            <div className="flex gap-2 w-full sm:w-auto">
               <button 
                 onClick={() => setPreviewMode(!previewMode)}
-                className={`flex-1 sm:flex-none px-6 py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all ${previewMode ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'}`}
+                className={`flex-1 sm:flex-none px-3 py-2 rounded-lg font-black text-xs flex items-center justify-center gap-1 transition-all ${previewMode ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'}`}
               >
-                <Eye className="w-5 h-5" /> {previewMode ? 'Voltar ao Editor' : 'Ver como fica no Celular'}
+                <Eye className="w-4 h-4" /> {previewMode ? 'Voltar' : 'Testar'}
               </button>
               <button 
                 onClick={handleSave}
                 disabled={isSaving}
-                className="flex-1 sm:flex-none px-8 py-3 bg-whatsapp text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-whatsapp/20 hover:opacity-90 transition-all"
+                className="flex-1 sm:flex-none px-4 py-2 bg-whatsapp text-white rounded-lg font-black text-xs flex items-center justify-center gap-1 shadow-lg shadow-whatsapp/20 hover:opacity-90 transition-all"
               >
-                {isSaving ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                Salvar Tudo
+                {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Salvar
               </button>
             </div>
           </header>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
             {/* Left Side - Mapa Simples */}
-            <div className={`${previewMode ? 'hidden' : 'lg:col-span-4'} space-y-4`}>
-              <div className="glass-card rounded-[2rem] p-6 border border-border/50">
-                <h3 className="text-sm font-black uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-2">
-                  <Settings className="w-4 h-4" /> Nome do Atendimento
+            <div className={`${previewMode ? 'hidden' : 'lg:col-span-4'} space-y-3`}>
+              <div className="glass-card rounded-xl p-3 border border-border/50">
+                <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1">
+                  <Settings className="w-3 h-3" /> Nome
                 </h3>
                 <input 
                   type="text"
                   value={flowName}
                   onChange={(e) => setFlowName(e.target.value)}
                   placeholder="Ex: Suporte de Vendas"
-                  className="w-full px-5 py-4 bg-background border border-border rounded-2xl font-bold focus:ring-4 focus:ring-primary/10 transition-all"
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs font-bold focus:ring-2 focus:ring-primary/10 transition-all"
                 />
               </div>
 
-              <div className="glass-card rounded-[2rem] p-6 border border-border/50">
-                <h3 className="text-sm font-black uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-2">
-                  <MousePointer2 className="w-4 h-4" /> Etapas Criadas
+              <div className="glass-card rounded-xl p-3 border border-border/50">
+                <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1">
+                  <MousePointer2 className="w-3 h-3" /> Etapas
                 </h3>
-                <div className="space-y-2">
+                <div className="space-y-1">
                   {Object.values(flowData.menus).map(menu => (
                     <button 
                       key={menu.id}
                       onClick={() => setSelectedMenuId(menu.id)}
-                      className={`w-full p-4 rounded-2xl text-left transition-all border-2 ${
+                      className={`w-full p-2 rounded-lg text-left transition-all border-2 text-xs ${
                         selectedMenuId === menu.id 
                         ? 'border-primary bg-primary/5 text-primary font-black' 
                         : 'border-transparent bg-muted/30 text-muted-foreground hover:bg-muted/50'
                       }`}
                     >
                       <div className="flex justify-between items-center">
-                        <span className="truncate text-sm">{menu.id === flowData.rootMenuId ? 'Menu Principal' : `Resposta: ${menu.title.replace(/^Sub-menu:\s*/, '')}`}</span>
-                        {menu.id === flowData.rootMenuId && <span className="text-[8px] bg-primary text-white px-2 py-0.5 rounded-full">INÍCIO</span>}
+                        <span className="truncate">{menu.id === flowData.rootMenuId ? 'Menu Principal' : `Resposta: ${menu.title.replace(/^Sub-menu:\s*/, '')}`}</span>
+                        {menu.id === flowData.rootMenuId && <span className="text-[7px] bg-primary text-white px-1.5 py-0.5 rounded-full">INÍCIO</span>}
                       </div>
                     </button>
                   ))}
