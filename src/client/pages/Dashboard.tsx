@@ -158,16 +158,24 @@ export default function Dashboard() {
   }, [showConnectModal])
 
   const handleDisconnect = async () => {
-    if (!instance) return
     try {
       const token = localStorage.getItem('token')
-      await fetch(`/api/whatsapp/${instance.id}/disconnect`, {
+      // Rota correta para desconexão
+      const response = await fetch('/api/whatsapp/disconnect', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       })
-      toast.success('Instância desconectada')
-      setInstance(null)
+      
+      if (response.ok) {
+        toast.success('WhatsApp desconectado')
+        setInstance(null)
+        // Recarregar dashboard para garantir sincronia
+        setTimeout(() => loadDashboard(), 500)
+      } else {
+        throw new Error('Falha na resposta')
+      }
     } catch (error) {
+      console.error('Erro ao desconectar:', error)
       toast.error('Erro ao desconectar')
     }
   }

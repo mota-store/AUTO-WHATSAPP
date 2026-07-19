@@ -411,13 +411,30 @@ app.post('/api/whatsapp/reset', authMiddleware, async (req: Request, res: Respon
 
 app.post('/api/whatsapp/disconnect', authMiddleware, async (req: Request, res: Response) => {
   const user = (req as any).user as AuthPayload
-  const sock = sessions.get(user.userId)
-  if (sock) {
-    await sock.logout()
-    sessions.delete(user.userId)
-    res.json({ message: 'Desconectado' })
-  } else {
-    res.status(404).json({ message: 'Sessão não encontrada' })
+  try {
+    const instance = await db.getWhatsappInstance(user.userId)
+    const sock = sessions.get(user.userId)
+    
+    if (sock) {
+      // Remover ouvintes para evitar loops de reconexão durante o logout proposital
+      sock.ev.removeAllListeners('connection.update')
+      await sock.logout()
+      try { sock.ws.close() } catch (e) {}
+      sessions.delete(user.userId)
+    }
+
+    if (instance) {
+      await db.updateWhatsappInstance(instance.id, { 
+        status: 'disconnected', 
+        qrCode: null, 
+        pairingCode: null 
+      })
+    }
+    
+    res.json({ message: 'Desconectado com sucesso' })
+  } catch (error) {
+    console.error('[DISCONNECT ERROR]', error)
+    res.status(500).json({ message: 'Erro ao desconectar' })
   }
 })
 
