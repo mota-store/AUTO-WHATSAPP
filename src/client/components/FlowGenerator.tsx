@@ -1,0 +1,236 @@
+import React, { useState } from 'react'
+import { Wand2, X, AlertCircle, CheckCircle2, HelpCircle } from 'lucide-react'
+
+interface MenuOption {
+  id: string
+  number: number
+  text: string
+  nextMenuId?: string
+  response?: string
+}
+
+interface MenuNode {
+  id: string
+  title: string
+  message: string
+  options: MenuOption[]
+}
+
+interface MenuFlowData {
+  rootMenuId: string
+  menus: Record<string, MenuNode>
+}
+
+interface FlowGeneratorProps {
+  isOpen: boolean
+  onClose: () => void
+  onGenerate: (flowData: MenuFlowData) => void
+}
+
+export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGeneratorProps) {
+  const [script, setScript] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  if (!isOpen) return null
+
+  const parseScript = () => {
+    try {
+      setError(null)
+      if (!script.trim()) {
+        setError('Por favor, insira o roteiro do fluxo.')
+        return
+      }
+
+      const sections = script.split(/\n---\n|\n---\s*\n/).map(s => s.trim()).filter(Boolean)
+      if (sections.length === 0) {
+        setError('Roteiro inválido. Use "---" para separar as seções.')
+        return
+      }
+
+      const menus: Record<string, MenuNode> = {}
+      const menuMapping: Record<number, string> = {} // Map section index to menu ID
+
+      // First pass: Create menu nodes
+      sections.forEach((section, index) => {
+        const lines = section.split('\n').map(l => l.trim()).filter(Boolean)
+        const menuId = index === 0 ? 'menu_1' : `menu_${Date.now()}_${index}`
+        menuMapping[index] = menuId
+
+        // Extract title (first line if it starts with 🤖 or just first line)
+        let title = lines[0].replace(/^[🤖\s]+/, '')
+        let messageStartIdx = 1
+
+        // If it's a "Se responder X" section, the title is the trigger
+        if (lines[0].toLowerCase().startsWith('se responder') || lines[0].toLowerCase().startsWith('se escolher')) {
+          title = lines[0]
+        }
+
+        // Build message and extract options
+        const messageLines: string[] = []
+        const options: MenuOption[] = []
+        
+        // Skip trigger/title line for message content if it's not the first menu
+        const startLine = (index === 0) ? 0 : 1
+        
+        for (let i = startLine; i < lines.length; i++) {
+          const line = lines[i]
+          // Match emojis like 1️⃣, 2️⃣, etc. or just numbers 1., 2.
+          const optionMatch = line.match(/^([1-9]️⃣|[1-9]\.)\s*(.*)/)
+          
+          if (optionMatch) {
+            const numStr = optionMatch[1].replace(/[^1-9]/g, '')
+            const num = parseInt(numStr)
+            options.push({
+              id: `opt_${Date.now()}_${index}_${num}`,
+              number: num,
+              text: optionMatch[2].trim(),
+              response: ''
+            })
+          } else {
+            messageLines.push(line)
+          }
+        }
+
+        menus[menuId] = {
+          id: menuId,
+          title: title,
+          message: messageLines.join('\n'),
+          options: options
+        }
+      })
+
+      // Second pass: Link menus based on "Se responder X" logic
+      // This is a simplified linker: 
+      // Section 0 is root.
+      // Section 1 might be "Se responder 1️⃣" -> link menu_1 option 1 to section 1's menu
+      sections.forEach((section, index) => {
+        const lines = section.split('\n').map(l => l.trim()).filter(Boolean)
+        const firstLine = lines[0].toLowerCase()
+        
+        if (firstLine.startsWith('se responder') || firstLine.startsWith('se escolher')) {
+          // Find which option in which previous menu points here
+          // For simplicity in this "Magic Generator", we look for the number in the trigger line
+          const numMatch = firstLine.match(/[1-9]/)
+          if (numMatch) {
+            const targetNum = parseInt(numMatch[0])
+            // Look back for a menu that has this option and no nextMenuId yet
+            // Usually it's the previous section or the root section
+            for (let i = index - 1; i >= 0; i--) {
+              const prevMenuId = menuMapping[i]
+              const option = menus[prevMenuId].options.find(o => o.number === targetNum)
+              if (option && !option.nextMenuId) {
+                option.nextMenuId = menuMapping[index]
+                break
+              }
+            }
+          } else if (firstLine.includes('qualquer uma') || firstLine.includes('após escolher')) {
+            // Link all options from the previous section to this one if they don't have a nextMenuId
+            const prevMenuId = menuMapping[index - 1]
+            if (prevMenuId) {
+              menus[prevMenuId].options.forEach(opt => {
+                if (!opt.nextMenuId) opt.nextMenuId = menuMapping[index]
+              })
+            }
+          }
+        }
+      })
+
+      onGenerate({
+        rootMenuId: 'menu_1',
+        menus
+      })
+      onClose()
+    } catch (err) {
+      console.error(err)
+      setError('Erro ao processar o roteiro. Verifique a formatação.')
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-card w-full max-w-2xl rounded-3xl border border-border/50 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="p-6 border-b border-border/50 flex justify-between items-center bg-muted/30">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-xl">
+              <Wand2 className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-xl font-black tracking-tight">Gerador Mágico</h2>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Crie fluxos instantâneos</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-muted rounded-full transition-all">
+            <X className="w-6 h-6 text-muted-foreground" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="space-y-2">
+            <label className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1">
+              <HelpCircle className="w-3 h-3" /> Cole seu roteiro estruturado abaixo
+            </label>
+            <textarea
+              value={script}
+              onChange={(e) => setScript(e.target.value)}
+              placeholder="🤖 Nome do Fluxo&#10;&#10;Olá! Escolha uma opção:&#10;1️⃣ Opção A&#10;2️⃣ Opção B&#10;&#10;---&#10;&#10;Se responder 1️⃣&#10;Texto para opção 1..."
+              className="w-full h-64 p-4 bg-background border border-border rounded-2xl text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all resize-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 bg-primary/5 rounded-2xl border border-primary/10">
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-primary mb-2 flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3" /> Dicas de Formatação
+              </h4>
+              <ul className="text-[11px] font-bold text-muted-foreground space-y-1.5">
+                <li>• Use <code className="bg-primary/10 px-1 rounded">---</code> para separar as telas</li>
+                <li>• Use <code className="bg-primary/10 px-1 rounded">1️⃣</code>, <code className="bg-primary/10 px-1 rounded">2️⃣</code> para opções</li>
+                <li>• Use <code className="bg-primary/10 px-1 rounded">Se responder 1️⃣</code> para conectar</li>
+                <li>• O robô ignora o título nas mensagens</li>
+              </ul>
+            </div>
+            <div className="p-4 bg-muted/30 rounded-2xl border border-border/50">
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" /> Exemplo Rápido
+              </h4>
+              <pre className="text-[9px] font-mono text-muted-foreground overflow-x-auto">
+{`Olá! Como ajudar?
+1️⃣ Comprar
+2️⃣ Suporte
+
+---
+
+Se responder 1️⃣
+Qual produto deseja?`}
+              </pre>
+            </div>
+          </div>
+
+          {error && (
+            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-xl flex items-center gap-2 text-destructive text-xs font-bold">
+              <AlertCircle className="w-4 h-4" /> {error}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 border-t border-border/50 bg-muted/30 flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-3 border border-border rounded-xl font-black text-xs uppercase tracking-widest hover:bg-muted transition-all"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={parseScript}
+            className="flex-[2] px-4 py-3 bg-primary text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-primary/20 hover:opacity-90 transition-all flex items-center justify-center gap-2"
+          >
+            <Wand2 className="w-4 h-4" /> Gerar Fluxo Mágico
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

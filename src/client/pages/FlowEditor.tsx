@@ -15,9 +15,11 @@ import {
   MousePointer2,
   ChevronLeft,
   RefreshCw,
-  Send
+  Send,
+  Wand2
 } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
+import FlowGenerator from '../components/FlowGenerator'
 
 interface MenuOption {
   id: string
@@ -68,6 +70,7 @@ export default function FlowEditor() {
   const [isLoading, setIsLoading] = useState(!!flowId)
   const [previewMode, setPreviewMode] = useState(false)
   const [botAvatar, setBotAvatar] = useState<string>('')
+  const [showGenerator, setShowGenerator] = useState(false)
 
   // Preview chat state
   const [previewCurrentMenuId, setPreviewCurrentMenuId] = useState<string>('')
@@ -265,6 +268,14 @@ export default function FlowEditor() {
     setPreviewInput('')
   }
 
+  const handleGenerate = (newFlowData: MenuFlowData) => {
+    setFlowData(newFlowData)
+    if (newFlowData.rootMenuId) {
+      setSelectedMenuId(newFlowData.rootMenuId)
+    }
+    toast.success('Fluxo gerado com sucesso!')
+  }
+
   const selectedMenu = flowData.menus[selectedMenuId]
 
   if (isLoading) {
@@ -293,6 +304,12 @@ export default function FlowEditor() {
               </div>
             </div>
             <div className="flex gap-2 w-full sm:w-auto">
+              <button 
+                onClick={() => setShowGenerator(true)}
+                className="flex-1 sm:flex-none px-3 py-2 bg-primary/10 text-primary rounded-lg font-black text-xs flex items-center justify-center gap-1 hover:bg-primary hover:text-white transition-all"
+              >
+                <Wand2 className="w-4 h-4" /> Gerador Mágico
+              </button>
               <button 
                 onClick={() => setPreviewMode(!previewMode)}
                 className={`flex-1 sm:flex-none px-3 py-2 rounded-lg font-black text-xs flex items-center justify-center gap-1 transition-all ${previewMode ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'}`}
@@ -537,6 +554,12 @@ export default function FlowEditor() {
           </div>
         </div>
       </main>
+
+      <FlowGenerator 
+        isOpen={showGenerator} 
+        onClose={() => setShowGenerator(false)} 
+        onGenerate={handleGenerate} 
+      />
     </div>
   )
 }
