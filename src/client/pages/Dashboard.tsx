@@ -171,19 +171,25 @@ export default function Dashboard() {
   }
 
   const handleReset = async () => {
-    if (!instance) return
     try {
       const token = localStorage.getItem('token')
-      await fetch(`/api/whatsapp/${instance.id}/reset`, {
+      // Rota global de reset que não depende de ter a instância carregada no state
+      await fetch('/api/whatsapp/reset', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       })
-      // Limpar estados locais
-      setInstance({ ...instance, qrCode: undefined, pairingCode: undefined })
+      // Limpar estados locais de forma agressiva
+      setInstance(null)
       setPhoneNumber('')
       setShowPairingLoading(false)
+      setIsConnecting(false)
+      toast.success('Conexão resetada. Tente novamente.')
+      
+      // Forçar recarga dos dados do dashboard
+      setTimeout(() => loadDashboard(), 500)
     } catch (error) {
-      console.error('Erro ao resetar')
+      console.error('Erro ao resetar:', error)
+      toast.error('Erro ao resetar conexão')
     }
   }
 

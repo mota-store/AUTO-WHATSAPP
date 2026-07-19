@@ -191,10 +191,10 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
   const version = baileysVersion
 
-  // CONFIGURAÇÃO OPERA SOLICITADA PELO USUÁRIO
-  const browserConfig: [string, string, string] = phoneNumber 
-    ? ['Opera', 'Windows', '10.0.0'] 
-    : ['MotaFlow', 'Opera', '1.0.0']
+  // CONFIGURAÇÃO NATIVA DO BAILEYS (MAIS ESTÁVEL)
+  const browserConfig = phoneNumber 
+    ? Browsers.ubuntu('Chrome') 
+    : ['MotaFlow', 'Chrome', '1.0.0'] as [string, string, string]
 
   console.log(`[MOTA-FLOW] Iniciando socket com Opera: ${browserConfig.join(' ')}`)
 
@@ -221,25 +221,28 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     const cleanNumber = cleanPhoneNumber(phoneNumber)
     console.log(`[MOTA-FLOW] Agendando Pairing Code (Opera) para: ${cleanNumber}`)
     
+    // Aumentado para 15 segundos para garantir que o socket esteja 100% pronto
     setTimeout(async () => {
       try {
         if (sock.authState.creds.registered) return
-        console.log(`[MOTA-FLOW] Solicitando Pairing Code via Opera para ${cleanNumber}...`)
+        console.log(`[MOTA-FLOW] Solicitando Pairing Code (Nativo Baileys) para ${cleanNumber}...`)
         const code = await sock.requestPairingCode(cleanNumber)
         console.log(`[MOTA-FLOW] Pairing Code gerado: ${code}`)
         await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
       } catch (err: any) {
         console.error('[MOTA-FLOW] Erro ao solicitar Pairing Code:', err?.message)
+        // Segunda tentativa com 20s de delay
         setTimeout(async () => {
           try {
             if (sock.ws.isOpen) {
+              console.log(`[MOTA-FLOW] Segunda tentativa de Pairing Code para ${cleanNumber}...`)
               const code2 = await sock.requestPairingCode(cleanNumber)
               await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code2, qrCode: null })
             }
           } catch (e) {}
-        }, 15000)
+        }, 20000)
       }
-    }, 10000)
+    }, 15000)
   }
 
   sock.ev.on('connection.update', async (update) => {
