@@ -2,13 +2,13 @@ import express, { Request, Response, NextFunction } from 'express'
 import cors from 'cors'
 import { createToken, verifyPassword, hashPassword, verifyToken, extractToken } from './src/server/utils'
 import * as db from './src/server/db'
+import { eq } from 'drizzle-orm'
 import { AuthPayload, CreateFlowRequest, UpdateFlowRequest } from './src/server/types'
 import { MenuFlowData, MenuNode, MenuOption } from './drizzle/schema'
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import fs from 'fs'
 import path from 'path'
-import { fileURLToPath } from 'url'
 import makeWASocket, {
   DisconnectReason,
   useMultiFileAuthState,
@@ -20,6 +20,7 @@ import makeWASocket, {
 import pino from 'pino'
 import { Boom } from '@hapi/boom'
 import QRCode from 'qrcode'
+import { fileURLToPath } from 'url'
 
 const execAsync = promisify(exec)
 const sessions = new Map<number, any>()
@@ -109,6 +110,34 @@ app.get('/api/auth/me', authMiddleware, async (req: Request, res: Response) => {
   }
 })
 
+app.put('/api/auth/profile', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userPayload = (req as any).user as AuthPayload
+    const { name } = req.body
+    if (!name) return res.status(400).json({ message: 'Nome é obrigatório' })
+    
+    const database = await db.getDb()
+    await database.update(db.schema.users).set({ name }).where(eq(db.schema.users.id, userPayload.userId))
+    
+    res.json({ message: 'Perfil atualizado' })
+  } catch (error: any) {
+    res.status(500).json({ message: 'Erro ao atualizar perfil' })
+  }
+})
+
+app.put('/api/auth/avatar', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userPayload = (req as any).user as AuthPayload
+    const { avatar } = req.body
+    if (!avatar) return res.status(400).json({ message: 'Avatar é obrigatório' })
+    
+    await db.updateUserAvatar(userPayload.userId, avatar)
+    res.json({ message: 'Avatar atualizado' })
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Erro ao atualizar avatar' })
+  }
+})
+
 app.get('/api/dashboard', authMiddleware, async (req: Request, res: Response) => {
   try {
     const user = (req as any).user as AuthPayload
@@ -150,6 +179,17 @@ app.post('/api/flows/:flowId/activate', authMiddleware, async (req: Request, res
     res.json({ message: 'Fluxo ativado' })
   } catch (error) {
     res.status(500).json({ message: 'Erro ao ativar fluxo' })
+  }
+})
+
+app.delete('/api/flows/:flowId', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user as AuthPayload
+    const flowId = parseInt(req.params.flowId)
+    await db.deleteMenuFlow(flowId)
+    res.json({ message: 'Fluxo excluído' })
+  } catch (error) {
+    res.status(500).json({ message: 'Erro ao excluir fluxo' })
   }
 })
 
@@ -370,7 +410,7 @@ async function processMessage(sock: any, msg: WAMessage, userId: number, instanc
     }
 
     if (!flowData || !flowData.menus || !flowData.rootMenuId) {
-      console.error(`[MOTA-FLOW] [User ${userId}] Estrutura de fluxo inválida.`)
+      console.error(`[MOTA-FLOW] [User ${userId}] Estrutura de fluxo inválida: menus ou rootMenuId ausentes.`)
       return
     }
 
@@ -390,6 +430,7 @@ async function processMessage(sock: any, msg: WAMessage, userId: number, instanc
         console.log(`[MOTA-FLOW] [User ${userId}] Fluxo iniciado/resetado para ${from}`)
       } else {
         console.error(`[MOTA-FLOW] [User ${userId}] Menu raiz ${flowData.rootMenuId} não encontrado.`)
+        await sock.sendMessage(from, { text: 'Desculpe, o fluxo principal não foi encontrado. Por favor, entre em contato com o suporte.' })
       }
       return
     }
@@ -399,6 +440,20 @@ async function processMessage(sock: any, msg: WAMessage, userId: number, instanc
     if (!currentMenu) {
       console.log(`[MOTA-FLOW] [User ${userId}] Menu atual ${state.menuId} não encontrado. Resetando.`)
       messageStates.delete(from)
+      await sock.sendMessage(from, { text: 'Desculpe, houve um problema e seu menu atual não foi encontrado. Reiniciando o fluxo.' })
+      // Tenta reiniciar o fluxo
+      const rootMenu = flowData.menus[flowData.rootMenuId]
+      if (rootMenu) {
+        await sendMenu(sock, from, rootMenu)
+        messageStates.set(from, { 
+          flowId: activeFlow.id, 
+          menuId: rootMenu.id, 
+          userId, 
+          instanceId,
+          status: 'active',
+          lastInteraction: now
+        })
+      }
       return
     }
 
@@ -416,7 +471,7 @@ async function processMessage(sock: any, msg: WAMessage, userId: number, instanc
         await sock.sendMessage(from, { text: option.response })
       }
 
-      // Se tiver um próximo menu, envia e atualiza estado
+      // Se tiver um próximo menu e ele existir, envia e atualiza estado
       if (option.nextMenuId && flowData.menus[option.nextMenuId]) {
         const nextMenu = flowData.menus[option.nextMenuId]
         await sendMenu(sock, from, nextMenu)
@@ -429,12 +484,13 @@ async function processMessage(sock: any, msg: WAMessage, userId: number, instanc
           lastInteraction: now
         })
       } else {
-        // Se não tiver próximo menu, marca como finalizado
+        // Se não tiver próximo menu ou o próximo menu não existir, marca como finalizado
         messageStates.set(from, { 
           ...state, 
           status: 'finished',
           lastInteraction: now
         })
+        await sock.sendMessage(from, { text: 'Obrigado! Seu atendimento foi finalizado. Digite \'menu\' para recomeçar.' })
       }
     } else {
       // Se não for uma opção válida, repete o menu atual
@@ -443,6 +499,8 @@ async function processMessage(sock: any, msg: WAMessage, userId: number, instanc
     }
   } catch (err) {
     console.error(`[MOTA-FLOW] [User ${userId}] Erro crítico no processMessage:`, err)
+    const from = msg.key.remoteJid!
+    await sock.sendMessage(from, { text: 'Desculpe, ocorreu um erro inesperado. Por favor, tente novamente ou digite \'menu\' para reiniciar.' })
   }
 }
 
@@ -528,7 +586,9 @@ app.use(express.static(path.join(__dirname, 'client')))
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'client', 'index.html')))
 
 app.listen(PORT, () => {
-  preloadBaileysVersion().then(() => {
-    console.log(`🚀 [MOTA-FLOW] Porta ${PORT}`)
+  db.syncSchema().then(() => {
+    preloadBaileysVersion().then(() => {
+      console.log(`🚀 [MOTA-FLOW] Porta ${PORT}`)
+    })
   })
 })
