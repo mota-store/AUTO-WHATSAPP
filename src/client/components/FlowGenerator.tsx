@@ -58,7 +58,6 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
 
         // Extract title (first line if it starts with 🤖 or just first line)
         let title = lines[0].replace(/^[🤖\s]+/, '')
-        let messageStartIdx = 1
 
         // If it's a "Se responder X" section, the title is the trigger
         if (lines[0].toLowerCase().startsWith('se responder') || lines[0].toLowerCase().startsWith('se escolher')) {
@@ -75,10 +74,10 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
         for (let i = startLine; i < lines.length; i++) {
           const line = lines[i]
           // Match emojis like 1️⃣, 2️⃣, etc. or just numbers 1., 2.
-          const optionMatch = line.match(/^([1-9]️⃣|[1-9]\.)\s*(.*)/)
+          const optionMatch = line.match(/^([0-9]️⃣|[0-9]\.)\s*(.*)/)
           
           if (optionMatch) {
-            const numStr = optionMatch[1].replace(/[^1-9]/g, '')
+            const numStr = optionMatch[1].replace(/[^0-9]/g, '') // Allow 0
             const num = parseInt(numStr)
             options.push({
               id: `opt_${Date.now()}_${index}_${num}`,
@@ -100,24 +99,19 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
       })
 
       // Second pass: Link menus based on "Se responder X" logic
-      // This is a simplified linker: 
-      // Section 0 is root.
-      // Section 1 might be "Se responder 1️⃣" -> link menu_1 option 1 to section 1's menu
       sections.forEach((section, index) => {
         const lines = section.split('\n').map(l => l.trim()).filter(Boolean)
         const firstLine = lines[0].toLowerCase()
         
-        if (firstLine.startsWith('se responder') || firstLine.startsWith('se escolher')) {
-          // Find which option in which previous menu points here
-          // For simplicity in this "Magic Generator", we look for the number in the trigger line
-          const numMatch = firstLine.match(/[1-9]/)
+        if (firstLine.includes('se responder') || firstLine.includes('se escolher')) {
+          // Extract number from trigger line, e.g., "Se responder 1️⃣ - Individual"
+          const numMatch = /(?:se responder|se escolher)[^\d]*([0-9]️⃣|[0-9])/.exec(firstLine)
           if (numMatch) {
-            const targetNum = parseInt(numMatch[0])
-            // Look back for a menu that has this option and no nextMenuId yet
-            // Look through all previously defined menus to find the option to link
-            // This assumes the trigger refers to an option in a *previous* menu
+            const targetNum = parseInt(numMatch[1].replace(/[^0-9]/g, ""))
+            
             let linked = false
-            for (let i = 0; i < index; i++) { // Iterate through all previous sections
+            // Look through all previously defined menus to find the option to link
+            for (let i = 0; i < index; i++) { 
               const prevMenuId = menuMapping[i]
               const option = menus[prevMenuId].options.find(o => o.number === targetNum)
               if (option && !option.nextMenuId) {
@@ -126,8 +120,8 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
                 break
               }
             }
+            // If not linked to a specific number, try to link to the previous menu's options
             if (!linked) {
-              // If not linked to a specific number, try to link to the previous menu's options
               const prevMenuId = menuMapping[index - 1]
               if (prevMenuId) {
                 menus[prevMenuId].options.forEach(opt => {
@@ -135,15 +129,24 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
                 })
               }
             }
+          } else if (firstLine.includes('qualquer uma') || firstLine.includes('após escolher')) {
+            // Link all options from the previous section to this one if they don't have a nextMenuId
+            const prevMenuId = menuMapping[index - 1]
+            if (prevMenuId) {
+              menus[prevMenuId].options.forEach(opt => {
+                if (!opt.nextMenuId) opt.nextMenuId = menuMapping[index]
+              })
+            }
           }
-        } else if (firstLine.includes('qualquer uma') || firstLine.includes('após escolher')) {
-          // Link all options from the previous section to this one if they don't have a nextMenuId
-          const prevMenuId = menuMapping[index - 1]
-          if (prevMenuId) {
-            menus[prevMenuId].options.forEach(opt => {
-              if (!opt.nextMenuId) opt.nextMenuId = menuMapping[index]
-            })
-          }
+        }
+
+        // Handle "Voltar ao menu principal" option linking to rootMenuId
+        if (menus[menuMapping[index]]) {
+          menus[menuMapping[index]].options.forEach(opt => {
+            if (opt.number === 0 && opt.text.toLowerCase().includes('voltar ao menu principal')) {
+              opt.nextMenuId = 'menu_0'
+            }
+          })
         }
       })
 
