@@ -44,7 +44,7 @@ console.log('🚀 [MOTA-FLOW] Iniciando servidor...')
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }))
 app.use(express.json({ limit: '10mb' }))
 
-let baileysVersion: [number, number, number] = [2, 2413, 1]
+let baileysVersion: [number, number, number] = [2, 3000, 14]  // Versão mais recente com melhor compatibilidade
 
 async function preloadBaileysVersion() {
   try {
@@ -268,7 +268,13 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
     },
-    logger: pino({ level: 'silent' }),
+    logger: pino({ 
+      level: phoneNumber ? 'debug' : 'silent',  // Logs detalhados durante pareamento
+      transport: phoneNumber ? {
+        target: 'pino-pretty',
+        options: { colorize: true }
+      } : undefined
+    }),
     browser: browserConfig,
     connectTimeoutMs: 60000,
     printQRInTerminal: false,
@@ -597,6 +603,18 @@ async function sendMenu(sock: any, to: string, menu: MenuNode) {
 app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Response) => {
   const user = (req as any).user as AuthPayload
   const { phoneNumber } = req.body
+  
+  // Limpeza profunda: remover sessão anterior se existir
+  const sessionPath = path.join(process.cwd(), 'sessions', `session_${user.userId}`)
+  if (fs.existsSync(sessionPath)) {
+    try {
+      fs.rmSync(sessionPath, { recursive: true, force: true })
+      console.log(`[MOTA-FLOW] Sessão anterior limpa para usuário ${user.userId}`)
+    } catch (err) {
+      console.error(`[MOTA-FLOW] Erro ao limpar sessão:`, err)
+    }
+  }
+  
   let instance = await db.getWhatsappInstance(user.userId)
   if (!instance) {
     await db.createWhatsappInstance(user.userId)
