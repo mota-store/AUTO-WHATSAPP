@@ -652,11 +652,19 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
     instance = await db.getWhatsappInstance(user.userId)
   }
   if (instance) {
-    await db.updateWhatsappInstance(instance.id, { qrCode: null, pairingCode: null, status: 'connecting' })
-    connectToWhatsApp(user.userId, instance.id, phoneNumber)
-    res.json({ message: 'Iniciando...' })
+    try {
+      await db.updateWhatsappInstance(instance.id, { qrCode: null, pairingCode: null, status: 'connecting' })
+      console.log(`[MOTA-FLOW] Iniciando conexão para usuário ${user.userId} com número ${phoneNumber || 'pairing code'}`)
+      connectToWhatsApp(user.userId, instance.id, phoneNumber).catch(err => {
+        console.error(`[MOTA-FLOW] Erro ao conectar WhatsApp:`, err)
+      })
+      res.json({ message: 'Iniciando...' })
+    } catch (err: any) {
+      console.error(`[MOTA-FLOW] Erro na rota connect:`, err.message)
+      res.status(500).json({ message: 'Erro ao iniciar conexão' })
+    }
   } else {
-    res.status(500).json({ message: 'Erro' })
+    res.status(500).json({ message: 'Erro ao criar instância' })
   }
 })
 
@@ -671,7 +679,7 @@ app.post('/api/whatsapp/reset', authMiddleware, async (req: Request, res: Respon
         try { sock.ws.close() } catch (e) {}
         sessions.delete(user.userId)
       }
-      const sessionPath = `sessions/session-${user.userId}`
+      const sessionPath = path.join(process.cwd(), 'sessions', `session_${user.userId}`)
       if (fs.existsSync(sessionPath)) fs.rmSync(sessionPath, { recursive: true, force: true })
       await db.updateWhatsappInstance(instance.id, { status: 'disconnected', qrCode: null, pairingCode: null, phoneNumber: null })
       res.json({ message: 'Resetado' })
