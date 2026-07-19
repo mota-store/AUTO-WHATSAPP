@@ -7,13 +7,16 @@ import {
   LogOut, 
   Menu, 
   X,
-  Zap
+  Zap,
+  BookOpen
 } from 'lucide-react'
+import Tutorial from './Tutorial'
 
 export default function Sidebar() {
   const navigate = useNavigate()
   const location = useLocation()
   const [isOpen, setIsOpen] = useState(false)
+  const [showTutorial, setShowTutorial] = useState(false)
   const user = JSON.parse(localStorage.getItem('user') || '{}')
   const profileImage = localStorage.getItem('profileImage')
 
@@ -90,6 +93,18 @@ export default function Sidebar() {
                 </button>
               )
             })}
+            
+            {/* Tutorial Button */}
+            <button
+              onClick={() => {
+                setShowTutorial(true)
+                setIsOpen(false)
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-zinc-500 hover:text-white hover:bg-zinc-900 transition-all duration-200 active:scale-95 mt-2 border border-zinc-800/50"
+            >
+              <BookOpen className="w-5 h-5" />
+              Tutorial
+            </button>
           </nav>
 
           {/* Footer Sidebar */}
@@ -120,6 +135,9 @@ export default function Sidebar() {
           </div>
         </div>
       </aside>
+
+      {/* Tutorial Modal */}
+      <Tutorial isOpen={showTutorial} onClose={() => setShowTutorial(false)} />
     </>
   )
 }

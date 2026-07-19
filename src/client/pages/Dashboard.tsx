@@ -13,10 +13,12 @@ import {
   WifiOff,
   History,
   ArrowRight,
-  X
+  X,
+  BookOpen
 } from 'lucide-react'
 import { toast } from 'sonner'
 import Sidebar from '../components/Sidebar'
+import Tutorial from '../components/Tutorial'
 
 interface WhatsappInstance {
   id: number
@@ -32,6 +34,7 @@ export default function Dashboard() {
   const [flows, setFlows] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showConnectModal, setShowConnectModal] = useState(false)
+  const [showTutorial, setShowTutorial] = useState(false)
   const [connectMethod, setConnectMethod] = useState<'qr' | 'pairing'>(() => {
     return (localStorage.getItem('mota_connect_method') as 'qr' | 'pairing') || 'qr'
   })
@@ -426,6 +429,13 @@ export default function Dashboard() {
                 {instance?.status === 'connected' ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
                 {instance?.status === 'connected' ? 'Online' : 'Offline'}
               </div>
+              <button
+                onClick={() => setShowTutorial(true)}
+                className="p-1.5 hover:bg-primary/10 text-zinc-500 hover:text-primary rounded-lg transition-all"
+                title="Ver Tutorial"
+              >
+                <BookOpen className="w-4 h-4" />
+              </button>
               {instance?.status === 'connected' && (
                 <button 
                   onClick={handleDisconnect}
@@ -524,6 +534,9 @@ export default function Dashboard() {
           )}
         </div>
       </main>
+
+      {/* Tutorial Modal */}
+      <Tutorial isOpen={showTutorial} onClose={() => setShowTutorial(false)} />
     </div>
   )
 }
