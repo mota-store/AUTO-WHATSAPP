@@ -48,14 +48,12 @@ let baileysVersion: [number, number, number] = [2, 3000, 14]  // Versão mais re
 
 async function preloadBaileysVersion() {
   try {
-    const result = await Promise.race([
-      fetchLatestBaileysVersion(),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000))
-    ])
+    console.log('[MOTA-FLOW] Iniciando preload de versão Baileys...')
+    const result = await fetchLatestBaileysVersion()
     baileysVersion = (result as any).version
-    console.log(`✅ [MOTA-FLOW] Versão Baileys: ${baileysVersion.join('.')}`)
+    console.log(`✅ [MOTA-FLOW] Versão Baileys atualizada: ${baileysVersion.join('.')}`)
   } catch (err) {
-    console.log('⚠️ [MOTA-FLOW] Usando versão fallback:', baileysVersion.join('.'))
+    console.log('⚠️ [MOTA-FLOW] Usando versão fallback (sem atualização):', baileysVersion.join('.'))
   }
 }
 
@@ -262,6 +260,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   // Usar uma string de navegador altamente compatível
   const browserConfig = ['Linux', 'Chrome', '120.0.0.0']  // Simular Chrome 120 no Linux
 
+  console.log(`[MOTA-FLOW] [User ${userId}] Criando socket com versão: ${baileysVersion.join('.')}`)
   const sock = makeWASocket({
     version: baileysVersion,
     auth: {
@@ -285,6 +284,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     defaultQueryTimeoutMs: 60000,  // Timeout padrão para queries
   })
 
+  console.log(`[MOTA-FLOW] [User ${userId}] Socket criado e armazenado com sucesso`)
   sessions.set(userId, sock)
   const reconnectPhone = phoneNumber
 
@@ -292,17 +292,34 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     const cleanNumber = cleanPhoneNumber(phoneNumber)
     setTimeout(async () => {
       try {
-        if (sock.authState.creds.registered) return
-        const code = await sock.requestPairingCode(cleanNumber)
+        console.log(`[MOTA-FLOW] [User ${userId}] Solicitando pairing code para ${cleanNumber}...`)
+        if (sock.authState.creds.registered) {
+          console.log(`[MOTA-FLOW] [User ${userId}] Socket já registrado, pulando pairing code`)
+          return
+        }
+        console.log(`[MOTA-FLOW] [User ${userId}] Chamando requestPairingCode...`)
+        const codePromise = sock.requestPairingCode(cleanNumber)
+        const code = await Promise.race([
+          codePromise,
+          new Promise<string>((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout ao solicitar pairing code')), 30000)
+          )
+        ])
+        console.log(`[MOTA-FLOW] [User ${userId}] Pairing code recebido: ${code}`)
         await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
       } catch (err: any) {
+        console.error(`[MOTA-FLOW] [User ${userId}] Erro ao obter pairing code (tentativa 1):`, err.message)
         setTimeout(async () => {
           try {
             if (sock.ws.isOpen) {
+              console.log(`[MOTA-FLOW] [User ${userId}] Tentando novamente...`)
               const code2 = await sock.requestPairingCode(cleanNumber)
+              console.log(`[MOTA-FLOW] [User ${userId}] Pairing code recebido na tentativa 2: ${code2}`)
               await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code2, qrCode: null })
             }
-          } catch (e) {}
+          } catch (e: any) {
+            console.error(`[MOTA-FLOW] [User ${userId}] Erro na tentativa 2:`, e.message)
+          }
         }, 10000)
       }
     }, 10000)
