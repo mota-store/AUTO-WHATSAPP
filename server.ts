@@ -221,7 +221,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     const cleanNumber = cleanPhoneNumber(phoneNumber)
     console.log(`[MOTA-FLOW] Agendando Pairing Code (Opera) para: ${cleanNumber}`)
     
-    // Reduzido para 3 segundos para máxima velocidade (Ubuntu é estável)
+    // Ajustado para 7 segundos para equilibrar velocidade e estabilidade (evita rejeição do WA)
     setTimeout(async () => {
       try {
         if (sock.authState.creds.registered) return
@@ -231,7 +231,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
         await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
       } catch (err: any) {
         console.error('[MOTA-FLOW] Erro ao solicitar Pairing Code:', err?.message)
-        // Segunda tentativa mais rápida também
+        // Segunda tentativa com 10s de delay
         setTimeout(async () => {
           try {
             if (sock.ws.isOpen) {
@@ -239,9 +239,9 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
               await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code2, qrCode: null })
             }
           } catch (e) {}
-        }, 5000)
+        }, 10000)
       }
-    }, 3000)
+    }, 7000)
   }
 
   sock.ev.on('connection.update', async (update) => {
