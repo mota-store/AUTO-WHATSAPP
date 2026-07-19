@@ -191,6 +191,9 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     browser: browserConfig,
     connectTimeoutMs: 60000,
     printQRInTerminal: false,
+    syncFullHistory: true,
+    markOnlineOnConnect: true,
+    shouldSyncHistoryMessage: () => true,
   })
 
   sessions.set(userId, sock)
@@ -252,12 +255,20 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   sock.ev.on('creds.update', saveCreds)
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    if (type !== 'notify') return
+    // Processar tanto notify quanto append para garantir que nada escape
     for (const msg of messages) {
       if (!msg.message || msg.key.fromMe) continue
-      console.log(`[MOTA-FLOW] Mensagem recebida de ${msg.key.remoteJid}: ${msg.message?.conversation || 'mídia/outros'}`)
+      
+      const text = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '').trim()
+      console.log(`[MOTA-FLOW] Mensagem detectada [${type}] de ${msg.key.remoteJid}: ${text || 'mídia/outros'}`)
+      
       await processMessage(sock, msg, userId, instanceId)
     }
+  })
+
+  // Log de histórico para debug
+  sock.ev.on('messaging-history.set', ({ messages }) => {
+    console.log(`[MOTA-FLOW] Histórico sincronizado: ${messages.length} mensagens carregadas.`)
   })
 }
 
