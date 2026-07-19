@@ -53,7 +53,7 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
       // First pass: Create menu nodes
       sections.forEach((section, index) => {
         const lines = section.split('\n').map(l => l.trim()).filter(Boolean)
-        const menuId = index === 0 ? 'menu_1' : `menu_${Date.now()}_${index}`
+        const menuId = index === 0 ? 'menu_0' : `menu_${Date.now()}_${index}`
         menuMapping[index] = menuId
 
         // Extract title (first line if it starts with 🤖 or just first line)
@@ -114,29 +114,41 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
           if (numMatch) {
             const targetNum = parseInt(numMatch[0])
             // Look back for a menu that has this option and no nextMenuId yet
-            // Usually it's the previous section or the root section
-            for (let i = index - 1; i >= 0; i--) {
+            // Look through all previously defined menus to find the option to link
+            // This assumes the trigger refers to an option in a *previous* menu
+            let linked = false
+            for (let i = 0; i < index; i++) { // Iterate through all previous sections
               const prevMenuId = menuMapping[i]
               const option = menus[prevMenuId].options.find(o => o.number === targetNum)
               if (option && !option.nextMenuId) {
                 option.nextMenuId = menuMapping[index]
+                linked = true
                 break
               }
             }
-          } else if (firstLine.includes('qualquer uma') || firstLine.includes('após escolher')) {
-            // Link all options from the previous section to this one if they don't have a nextMenuId
-            const prevMenuId = menuMapping[index - 1]
-            if (prevMenuId) {
-              menus[prevMenuId].options.forEach(opt => {
-                if (!opt.nextMenuId) opt.nextMenuId = menuMapping[index]
-              })
+            if (!linked) {
+              // If not linked to a specific number, try to link to the previous menu's options
+              const prevMenuId = menuMapping[index - 1]
+              if (prevMenuId) {
+                menus[prevMenuId].options.forEach(opt => {
+                  if (!opt.nextMenuId) opt.nextMenuId = menuMapping[index]
+                })
+              }
             }
+          }
+        } else if (firstLine.includes('qualquer uma') || firstLine.includes('após escolher')) {
+          // Link all options from the previous section to this one if they don't have a nextMenuId
+          const prevMenuId = menuMapping[index - 1]
+          if (prevMenuId) {
+            menus[prevMenuId].options.forEach(opt => {
+              if (!opt.nextMenuId) opt.nextMenuId = menuMapping[index]
+            })
           }
         }
       })
 
       onGenerate({
-        rootMenuId: 'menu_1',
+        rootMenuId: 'menu_0',
         menus
       })
       onClose()
