@@ -32,6 +32,7 @@ const messageStates = new Map<string, {
   status?: 'active' | 'finished',
   lastInteraction?: number 
 }>()
+const reconnectAttempts = new Map<number, { count: number, lastAttempt: number }>()
 const app = express()
 const PORT = process.env.PORT || 8080
 
@@ -325,26 +326,50 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
                          statusCode === DisconnectReason.timedOut    // Tempo limite excedido
 
       if (!isLoggedOut) {
-        console.log(`[MOTA-FLOW] [User ${userId}] Tentando reconectar automaticamente...`)
-        // Tentar reconectar. Se falhar, o próximo 'close' tratará como desconectado.
-        // No entanto, para garantir que o dashboard reflita o estado rapidamente,
-        // vamos definir um timeout para atualizar para 'disconnected' se a reconexão não ocorrer.
-        setTimeout(async () => {
-          if (sessions.get(userId) === sock && sock.ws.readyState !== sock.ws.OPEN) {
-            console.log(`[MOTA-FLOW] [User ${userId}] Reconexão falhou ou não ocorreu. Atualizando status para desconectado.`)
-            await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null, pairingCode: null, phoneNumber: null })
-            sessions.delete(userId)
-            if (fs.existsSync(sessionPath)) {
-              try {
-                fs.rmSync(sessionPath, { recursive: true, force: true })
-              } catch (e) {}
+        // Implementar retry com backoff exponencial
+        const retryData = reconnectAttempts.get(userId) || { count: 0, lastAttempt: 0 }
+        const now = Date.now()
+        const timeSinceLastAttempt = now - retryData.lastAttempt
+        
+        // Backoff exponencial: 5s, 10s, 20s, 40s, 80s (máximo 5 tentativas)
+        const backoffDelay = Math.min(5000 * Math.pow(2, retryData.count), 80000)
+        
+        if (retryData.count < 5) {
+          console.log(`[MOTA-FLOW] [User ${userId}] Tentativa de reconexão ${retryData.count + 1}/5 com backoff de ${backoffDelay}ms`)
+          reconnectAttempts.set(userId, { count: retryData.count + 1, lastAttempt: now })
+          
+          setTimeout(async () => {
+            if (sessions.get(userId) === sock && sock.ws.readyState !== sock.ws.OPEN) {
+              console.log(`[MOTA-FLOW] [User ${userId}] Reconectando...`)
+              connectToWhatsApp(userId, instanceId, reconnectPhone, true)
             }
-          } else if (sessions.get(userId) === sock) {
-            // Se ainda é a mesma sessão e está aberta, significa que reconectou com sucesso
-            console.log(`[MOTA-FLOW] [User ${userId}] Tentando reconectar automaticamente...`)
-            connectToWhatsApp(userId, instanceId, reconnectPhone, true)
+          }, backoffDelay)
+          
+          // Timeout para marcar como desconectado se não reconectar
+          setTimeout(async () => {
+            if (sessions.get(userId) === sock && sock.ws.readyState !== sock.ws.OPEN) {
+              console.log(`[MOTA-FLOW] [User ${userId}] Reconexão falhou após tentativas. Marcando como desconectado.`)
+              await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null, pairingCode: null, phoneNumber: null })
+              sessions.delete(userId)
+              reconnectAttempts.delete(userId)
+              if (fs.existsSync(sessionPath)) {
+                try {
+                  fs.rmSync(sessionPath, { recursive: true, force: true })
+                } catch (e) {}
+              }
+            }
+          }, backoffDelay + 15000) // Dar 15s após o backoff para tentar reconectar
+        } else {
+          console.log(`[MOTA-FLOW] [User ${userId}] Máximo de tentativas de reconexão atingido. Marcando como desconectado.`)
+          await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null, pairingCode: null, phoneNumber: null })
+          sessions.delete(userId)
+          reconnectAttempts.delete(userId)
+          if (fs.existsSync(sessionPath)) {
+            try {
+              fs.rmSync(sessionPath, { recursive: true, force: true })
+            } catch (e) {}
           }
-        }, 10000) // Dar um tempo maior para a reconexão se estabelecer, senão desconecta
+        }
       } else {
         console.log(`[MOTA-FLOW] [User ${userId}] Logout detectado ou sessão encerrada permanentemente.`)
         await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null, pairingCode: null, phoneNumber: null })
@@ -361,6 +386,8 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       console.log(`[MOTA-FLOW] [User ${userId}] Conexão aberta com sucesso!`)
       const phone = sock.user?.id.split(':')[0]
       await db.updateWhatsappInstance(instanceId, { status: 'connected', phoneNumber: phone, qrCode: null, pairingCode: null })
+      // Limpar contador de retry quando conecta com sucesso
+      reconnectAttempts.delete(userId)
     }
   })
 
@@ -622,6 +649,37 @@ app.post('/api/whatsapp/disconnect', authMiddleware, async (req: Request, res: R
     res.json({ message: 'Desconectado' })
   } catch (error) {
     res.status(500).json({ message: 'Erro' })
+  }
+})
+
+app.post('/api/whatsapp/reconnect', authMiddleware, async (req: Request, res: Response) => {
+  const user = (req as any).user as AuthPayload
+  try {
+    const instance = await db.getWhatsappInstance(user.userId)
+    if (!instance) {
+      return res.status(404).json({ message: 'Instância WhatsApp não encontrada' })
+    }
+
+    // Fechar socket antigo se existir
+    const sock = sessions.get(user.userId)
+    if (sock) {
+      sock.ev.removeAllListeners('connection.update')
+      sock.ev.removeAllListeners('creds.update')
+      sock.ev.removeAllListeners('messages.upsert')
+      try { sock.ws.close() } catch (e) {}
+      sessions.delete(user.userId)
+    }
+
+    // Atualizar status para conectando
+    await db.updateWhatsappInstance(instance.id, { status: 'connecting', qrCode: null, pairingCode: null })
+
+    // Tentar reconectar usando as credenciais salvas (isReconnect = true)
+    connectToWhatsApp(user.userId, instance.id, instance.phoneNumber || undefined, true)
+
+    res.json({ success: true, message: 'Reconectando...' })
+  } catch (error) {
+    console.error(`[MOTA-FLOW] Erro ao reconectar:`, error)
+    res.status(500).json({ success: false, message: 'Erro ao reconectar' })
   }
 })
 

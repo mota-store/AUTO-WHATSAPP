@@ -14,7 +14,8 @@ import {
   History,
   ArrowRight,
   X,
-  BookOpen
+  BookOpen,
+  AlertTriangle
 } from 'lucide-react'
 import { toast } from 'sonner'
 import Sidebar from '../components/Sidebar'
@@ -46,6 +47,7 @@ export default function Dashboard() {
   const [isConnecting, setIsConnecting] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showPairingLoading, setShowPairingLoading] = useState(false)
+  const [isReconnecting, setIsReconnecting] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
@@ -196,6 +198,30 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Erro ao resetar:', error)
       toast.error('Erro ao resetar conexão')
+    }
+  }
+
+  const handleReconnect = async () => {
+    try {
+      setIsReconnecting(true)
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/whatsapp/reconnect', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (response.ok) {
+        toast.success('Reconectando ao WhatsApp...')
+        startFastPolling()
+      } else {
+        const data = await response.json()
+        toast.error(data.message || 'Erro ao reconectar')
+      }
+    } catch (error) {
+      console.error('Erro ao reconectar:', error)
+      toast.error('Erro ao reconectar ao WhatsApp')
+    } finally {
+      setIsReconnecting(false)
     }
   }
 
@@ -436,6 +462,16 @@ export default function Dashboard() {
               >
                 <BookOpen className="w-4 h-4" />
               </button>
+              {instance?.status === 'disconnected' && (
+                <button
+                  onClick={handleReconnect}
+                  disabled={isReconnecting}
+                  className="p-1.5 hover:bg-red-600/10 text-zinc-500 hover:text-red-600 rounded-lg transition-all disabled:opacity-50 disabled:pointer-events-none"
+                  title="Reconectar"
+                >
+                  {isReconnecting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />}
+                </button>
+              )}
               {instance?.status === 'connected' && (
                 <button 
                   onClick={handleDisconnect}
