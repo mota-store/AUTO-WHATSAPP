@@ -101,11 +101,11 @@ export default function Tutorial({ isOpen, onClose }: TutorialProps) {
           </div>
 
           {/* Image */}
-          <div className="relative aspect-video max-w-full bg-gradient-to-br from-primary/10 to-emerald-500/10 rounded-2xl border-2 border-primary/30 flex items-center justify-center overflow-hidden">
+          <div className="relative w-full bg-gradient-to-br from-primary/10 to-emerald-500/10 rounded-2xl border-2 border-primary/30 flex items-center justify-center overflow-hidden">
             <img 
               src={slide.image} 
               alt={slide.title}
-              className="w-full h-full object-cover"
+              className="w-full h-auto max-h-[50vh] object-contain"
             />
           </div>
 
