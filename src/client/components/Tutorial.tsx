@@ -1,5 +1,11 @@
 import { useState } from 'react'
 import { ChevronLeft, ChevronRight, X, BookOpen } from 'lucide-react'
+import slide1 from '../assets/tutorial/slide-1.png'
+import slide2 from '../assets/tutorial/slide-2.png'
+import slide3 from '../assets/tutorial/slide-3.png'
+import slide4 from '../assets/tutorial/slide-4.png'
+import slide5 from '../assets/tutorial/slide-5.png'
+import slide6 from '../assets/tutorial/slide-6.png'
 
 interface TutorialSlide {
   title: string
@@ -12,37 +18,37 @@ const tutorialSlides: TutorialSlide[] = [
   {
     title: '👋 Bem-vindo ao MOTA-FLOW',
     description: 'Sua plataforma de automação WhatsApp está pronta para revolucionar seu atendimento. Vamos aprender o básico em 5 passos simples.',
-    image: '/tutorial/slide-1.png',
+    image: slide1,
     tips: ['Este é um tutorial interativo', 'Use as setas para navegar', 'Você pode fechar a qualquer momento']
   },
   {
     title: '📱 Passo 1: Conectar WhatsApp',
     description: 'Acesse o Dashboard e clique em "Conectar via QR Code" ou "Conectar via Número". Escaneie o código com seu celular ou use o código de pareamento.',
-    image: '/tutorial/slide-2.png',
+    image: slide2,
     tips: ['Mantenha seu celular próximo', 'O código expira em 60 segundos', 'Você pode reconectar a qualquer momento']
   },
   {
     title: '🤖 Passo 2: Criar um Fluxo',
     description: 'Vá para "Meus Fluxos" e clique em "Novo Fluxo". Um fluxo é uma sequência de mensagens automáticas que seu robô enviará.',
-    image: '/tutorial/slide-3.png',
+    image: slide3,
     tips: ['Comece com um fluxo simples', 'Você pode editar depois', 'Cada fluxo pode ter múltiplos níveis']
   },
   {
     title: '✏️ Passo 3: Editar Mensagens',
     description: 'No editor, customize o título, a mensagem inicial e adicione opções numeradas. Cada opção pode levar a uma nova mensagem.',
-    image: '/tutorial/slide-4.png',
+    image: slide4,
     tips: ['Use números para as opções (1, 2, 3...)', 'Adicione respostas automáticas', 'Crie sub-menus para aprofundar']
   },
   {
     title: '⚡ Passo 4: Ativar o Fluxo',
     description: 'Volte para "Meus Fluxos" e clique no ícone de energia para ativar seu fluxo. Apenas 1 fluxo pode estar ativo por vez.',
-    image: '/tutorial/slide-5.png',
+    image: slide5,
     tips: ['Fluxo ativo = robô respondendo', 'Você pode trocar de fluxo a qualquer hora', 'Desative para pausar o robô']
   },
   {
     title: '🎉 Pronto! Você está Pronto!',
     description: 'Seu robô agora está respondendo automaticamente no WhatsApp. Qualquer pessoa que enviar uma mensagem receberá suas respostas automáticas.',
-    image: '/tutorial/slide-6.png',
+    image: slide6,
     tips: ['Monitore as conversas', 'Ajuste os fluxos conforme necessário', 'Use o preview para testar antes de ativar']
   }
 ]
@@ -94,22 +100,12 @@ export default function Tutorial({ isOpen, onClose }: TutorialProps) {
             <p className="text-zinc-500 text-sm font-medium">Passo {currentSlide + 1} de {tutorialSlides.length}</p>
           </div>
 
-          {/* Image Placeholder */}
-          <div className="relative aspect-video max-w-full bg-gradient-to-br from-primary/10 to-emerald-500/10 rounded-2xl border-2 border-dashed border-primary/30 flex items-center justify-center overflow-hidden">
+          {/* Image */}
+          <div className="relative aspect-video max-w-full bg-gradient-to-br from-primary/10 to-emerald-500/10 rounded-2xl border-2 border-primary/30 flex items-center justify-center overflow-hidden">
             <img 
               src={slide.image} 
               alt={slide.title}
               className="w-full h-full object-cover"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none'
-                e.currentTarget.parentElement!.innerHTML = `
-                  <div class="text-center">
-                    <div class="text-6xl mb-2">📸</div>
-                    <p class="text-zinc-500 text-sm font-medium">Imagem do Tutorial</p>
-                    <p class="text-zinc-600 text-xs">${slide.title}</p>
-                  </div>
-                `
-              }}
             />
           </div>
 
