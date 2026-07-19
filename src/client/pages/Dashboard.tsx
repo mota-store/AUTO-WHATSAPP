@@ -29,6 +29,7 @@ interface WhatsappInstance {
 export default function Dashboard() {
   const navigate = useNavigate()
   const [instance, setInstance] = useState<WhatsappInstance | null>(null)
+  const [flows, setFlows] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showConnectModal, setShowConnectModal] = useState(false)
   const [connectMethod, setConnectMethod] = useState<'qr' | 'pairing'>(() => {
@@ -59,6 +60,7 @@ export default function Dashboard() {
       if (response.ok) {
         const data = await response.json()
         setInstance(data.instance)
+        setFlows(data.flows || [])
         // Se o pairing code chegou, parar o loading imediatamente
         if (data.instance?.pairingCode && showPairingLoading) {
           setShowPairingLoading(false)
@@ -482,25 +484,27 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                <div className="bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-xl rounded-2xl p-5 space-y-3">
-                  <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
-                    <Zap className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">Respostas</p>
-                    <h3 className="text-lg font-black">1.240</h3>
-                  </div>
-                </div>
-
-                <div className="bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-xl rounded-2xl p-5 space-y-3">
-                  <div className="w-10 h-10 bg-zinc-800 rounded-xl flex items-center justify-center text-zinc-400">
-                    <History className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">Atividade</p>
-                    <h3 className="text-lg font-black">Agora</h3>
-                  </div>
-                </div>
+	                <div className="bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-xl rounded-2xl p-5 space-y-3">
+	                  <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+	                    <Zap className="w-5 h-5" />
+	                  </div>
+	                  <div>
+	                    <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">Fluxo Ativo</p>
+	                    <h3 className="text-sm font-black truncate max-w-[150px]">
+	                      {flows.find(f => f.isActive)?.name || 'Nenhum Ativo'}
+	                    </h3>
+	                  </div>
+	                </div>
+	
+	                <div className="bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-xl rounded-2xl p-5 space-y-3">
+	                  <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500">
+	                    <ShieldCheck className="w-5 h-5" />
+	                  </div>
+	                  <div>
+	                    <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">Sistema</p>
+	                    <h3 className="text-sm font-black text-emerald-500">Operacional</h3>
+	                  </div>
+	                </div>
               </div>
 
               <div className="bg-zinc-900/40 border border-zinc-800/50 backdrop-blur-xl rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
