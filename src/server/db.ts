@@ -164,8 +164,9 @@ export async function updateWhatsappInstance(
   }
 }
 
-export async function updateWhatsappStatus(instanceId: number, status: string, qrCode: string | null) {
+export async function updateWhatsappStatus(instanceId: number, status: 'connected' | 'disconnected' | 'connecting', qrCode: string | null) {
   const database = await getDb()
+  if (!database) throw new Error('Database not initialized')
   await database
     .update(schema.whatsappInstances)
     .set({ status, qrCode })
@@ -175,19 +176,19 @@ export async function updateWhatsappStatus(instanceId: number, status: string, q
 // Menu Flow queries
 export async function createMenuFlow(userId: number, name: string, description: string | undefined, flowData: any) {
   const database = await getDb()
+  if (!database) throw new Error('Database not initialized')
   
   // Verificar se já existe algum fluxo para este usuário
   const existingFlows = await getUserMenuFlows(userId)
   const shouldBeActive = existingFlows.length === 0
 
-  const result = await database.insert(schema.menuFlows).values({
+  await database.insert(schema.menuFlows).values({
     userId,
     name,
     description,
     flowData: typeof flowData === 'object' ? JSON.stringify(flowData) : flowData,
-    isActive: shouldBeActive,
+    isActive: shouldBeActive ? 1 : 0,
   })
-  return result
 }
 
 export async function getMenuFlow(flowId: number) {
@@ -226,15 +227,16 @@ export async function updateMenuFlow(
 
 export async function activateFlow(userId: number, flowId: number) {
   const database = await getDb()
+  if (!database) throw new Error('Database not initialized')
   // Desativar todos os fluxos do usuário
   await database
     .update(schema.menuFlows)
-    .set({ isActive: false })
+    .set({ isActive: 0 })
     .where(eq(schema.menuFlows.userId, userId))
   // Ativar o fluxo escolhido
   await database
     .update(schema.menuFlows)
-    .set({ isActive: true })
+    .set({ isActive: 1 })
     .where(eq(schema.menuFlows.id, flowId))
 }
 

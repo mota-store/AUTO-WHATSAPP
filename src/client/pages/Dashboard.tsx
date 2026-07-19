@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { 
   Zap, 
   ShieldCheck, 
-  MessageSquare, 
   Smartphone, 
   RefreshCw, 
   LogOut, 
@@ -11,7 +10,6 @@ import {
   CheckCircle2, 
   Wifi,
   WifiOff,
-  History,
   ArrowRight,
   X,
   BookOpen,

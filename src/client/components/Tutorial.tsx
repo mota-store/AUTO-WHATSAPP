@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronLeft, ChevronRight, X, BookOpen } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import slide1 from '../assets/tutorial/slide-1.png'
 import slide2 from '../assets/tutorial/slide-2.png'
 import slide3 from '../assets/tutorial/slide-3.png'

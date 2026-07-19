@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Phone, Copy, Check, ArrowLeft, Loader2, MessageSquare } from 'lucide-react'
+import { Phone, Copy, Check, ArrowLeft, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 export default function Pairing() {

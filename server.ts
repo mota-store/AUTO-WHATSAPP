@@ -258,8 +258,8 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
 
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
   
-  // CONFIGURAÇÃO WINDOWS CHROME (Para melhor compatibilidade com código de pareamento)
-  const browserConfig = Browsers.windows('Chrome')
+  // CONFIGURAÇÃO UBUNTU CHROME (Para melhor compatibilidade com código de pareamento)
+  const browserConfig = Browsers.ubuntu('Chrome')
 
   const sock = makeWASocket({
     version: baileysVersion,
@@ -296,7 +296,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
           } catch (e) {}
         }, 10000)
       }
-    }, 7000)
+    }, 10000)
   }
 
   sock.ev.on('connection.update', async (update) => {
@@ -327,7 +327,6 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
         // Implementar retry com backoff exponencial
         const retryData = reconnectAttempts.get(userId) || { count: 0, lastAttempt: 0 }
         const now = Date.now()
-        const timeSinceLastAttempt = now - retryData.lastAttempt
         
         // Backoff exponencial: 5s, 10s, 20s, 40s, 80s (máximo 5 tentativas)
         const backoffDelay = Math.min(5000 * Math.pow(2, retryData.count), 80000)
