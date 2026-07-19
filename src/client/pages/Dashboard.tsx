@@ -61,14 +61,18 @@ export default function Dashboard() {
         const data = await response.json()
         setInstance(data.instance)
         setFlows(data.flows || [])
-        // Se o pairing code chegou, parar o loading imediatamente
-        if (data.instance?.pairingCode && showPairingLoading) {
+        
+        // Se o pairing code chegou, parar o loading e o isConnecting
+        if (data.instance?.pairingCode) {
           setShowPairingLoading(false)
+          setIsConnecting(false)
         }
+        
         // Se conectou, fechar modal e parar loading
         if (data.instance?.status === 'connected') {
           setShowConnectModal(false)
           setShowPairingLoading(false)
+          setIsConnecting(false)
           stopFastPolling()
         }
       }
@@ -93,13 +97,14 @@ export default function Dashboard() {
     }
   }
 
-  const handleConnect = async (usePairing = false) => {
+    const handleConnect = async (usePairing = false) => {
     if (usePairing && !phoneNumber) {
       toast.error('Digite o número do WhatsApp')
       return
     }
+    
+    // Iniciar estados de carregamento
     setIsConnecting(true)
-
     if (usePairing) {
       setShowPairingLoading(true)
     }
@@ -121,32 +126,20 @@ export default function Dashboard() {
       if (!response.ok) {
         const data = await response.json()
         toast.error(data.message || 'Erro ao conectar')
-        if (usePairing) setShowPairingLoading(false)
+        setIsConnecting(false)
+        setShowPairingLoading(false)
         return
       }
 
-      // Conectou com sucesso, iniciar polling rápido
+      // Iniciar polling rápido imediatamente
       startFastPolling()
-
-      if (usePairing) {
-        // Para pairing, esperar um pouco e fazer refresh para pegar o código
-        setTimeout(() => {
-          loadDashboard()
-        }, 3000)
-        // Se após 15s não tiver código, mostrar erro
-        setTimeout(() => {
-          if (usePairing && !instance?.pairingCode) {
-            loadDashboard() // última tentativa
-            // Check via state if still no code
-          }
-        }, 15000)
-      }
+      
     } catch (error) {
       toast.error('Erro de conexão')
-      if (usePairing) setShowPairingLoading(false)
-    } finally {
       setIsConnecting(false)
+      setShowPairingLoading(false)
     }
+    // Removido o setIsConnecting(false) do finally para manter o loading até o código chegar via polling
   }
 
   // Stop fast polling when modal closes
