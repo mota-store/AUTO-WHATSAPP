@@ -191,10 +191,10 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
   const version = baileysVersion
 
-  // CONFIGURAÇÃO UBUNTU (200% GARANTIDA)
-  const browserConfig = phoneNumber 
-    ? Browsers.ubuntu('Chrome') 
-    : ['MotaFlow', 'Chrome', '1.0.0'] as [string, string, string]
+  // CONFIGURAÇÃO MAC OS (ALTA COMPATIBILIDADE PARA FURA BLOQUEIO)
+  const browserConfig: [string, string, string] = phoneNumber 
+    ? ['Mac OS', 'Chrome', '121.0.0'] 
+    : ['MotaFlow', 'Chrome', '1.0.0']
 
   console.log(`[MOTA-FLOW] Iniciando socket com Opera: ${browserConfig.join(' ')}`)
 
@@ -225,12 +225,15 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     setTimeout(async () => {
       try {
         if (sock.authState.creds.registered) return
-        console.log(`[MOTA-FLOW] Solicitando Pairing Code (Ubuntu) para ${cleanNumber}...`)
+        console.log(`[MOTA-FLOW] Solicitando Pairing Code (Mac OS) para ${cleanNumber}...`)
         const code = await sock.requestPairingCode(cleanNumber)
-        console.log(`[MOTA-FLOW] Pairing Code gerado: ${code}`)
+        console.log(`[MOTA-FLOW] Pairing Code gerado com sucesso: ${code}`)
         await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
       } catch (err: any) {
-        console.error('[MOTA-FLOW] Erro ao solicitar Pairing Code:', err?.message)
+        console.error('[MOTA-FLOW] ERRO CRÍTICO PAIRING CODE:', err?.message || err)
+        if (err?.message?.includes('429')) {
+          console.error('[MOTA-FLOW] Bloqueio por excesso de tentativas (Rate Limit)')
+        }
         // Segunda tentativa com 10s de delay
         setTimeout(async () => {
           try {
