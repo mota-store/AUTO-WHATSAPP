@@ -411,6 +411,20 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       await db.updateWhatsappInstance(instanceId, { status: 'connected', phoneNumber: phone, qrCode: null, pairingCode: null })
       // Limpar contador de retry quando conecta com sucesso
       reconnectAttempts.delete(userId)
+      
+      // TESTE AUTOMÁTICO: Enviar mensagem de teste após 2 segundos
+      setTimeout(async () => {
+        try {
+          console.log(`[MOTA-FLOW] [User ${userId}] ========== INICIANDO TESTE DE DISPARO ==========`)
+          const testNumber = '559185892191@s.whatsapp.net'
+          const testMessage = '🤖 Teste MOTA-FLOW: Conexão bem-sucedida! ' + new Date().toLocaleTimeString('pt-BR')
+          console.log(`[MOTA-FLOW] [User ${userId}] Enviando mensagem de teste para ${testNumber}...`)
+          const result = await sock.sendMessage(testNumber, { text: testMessage })
+          console.log(`[MOTA-FLOW] [User ${userId}] ✅ TESTE SUCESSO! Mensagem enviada: ${result.key.id}`)
+        } catch (testErr: any) {
+          console.error(`[MOTA-FLOW] [User ${userId}] ❌ TESTE FALHOU! Erro:`, testErr.message)
+        }
+      }, 2000)
     }
   })
 
