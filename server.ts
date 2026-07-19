@@ -258,10 +258,8 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
 
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
   
-  // CONFIGURAÇÃO UBUNTU (200% GARANTIDA PELO USUÁRIO)
-  const browserConfig = phoneNumber 
-    ? Browsers.ubuntu('Chrome') 
-    : ['MotaFlow', 'Chrome', '1.0.0'] as [string, string, string]
+  // CONFIGURAÇÃO WINDOWS CHROME (Para melhor compatibilidade com código de pareamento)
+  const browserConfig = Browsers.windows('Chrome')
 
   const sock = makeWASocket({
     version: baileysVersion,
