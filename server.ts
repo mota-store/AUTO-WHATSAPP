@@ -161,6 +161,19 @@ function cleanPhoneNumber(num: string): string {
 async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber?: string, isReconnect = false) {
   const sessionPath = `sessions/session-${userId}`
 
+  // Fechar socket antigo se existir para evitar leaks e conflitos
+  const oldSock = sessions.get(userId)
+  if (oldSock) {
+    console.log(`[MOTA-FLOW] [User ${userId}] Fechando socket antigo antes de nova conexão.`)
+    try {
+      oldSock.ev.removeAllListeners('connection.update')
+      oldSock.ev.removeAllListeners('creds.update')
+      oldSock.ev.removeAllListeners('messages.upsert')
+      oldSock.ws.close()
+    } catch (e) {}
+    sessions.delete(userId)
+  }
+
   if (!isReconnect) {
     if (fs.existsSync(sessionPath)) {
       try {
@@ -221,32 +234,48 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update
-    console.log(`[MOTA-FLOW] Update de conexão: ${connection || 'status'}`)
+    console.log(`[MOTA-FLOW] [User ${userId}] Update de conexão: ${connection || 'status'}`)
 
     if (qr) {
-      const qrDataURL = await QRCode.toDataURL(qr)
-      await db.updateWhatsappInstance(instanceId, { qrCode: qrDataURL, status: 'connecting', pairingCode: null })
+      try {
+        const qrDataURL = await QRCode.toDataURL(qr)
+        await db.updateWhatsappInstance(instanceId, { qrCode: qrDataURL, status: 'connecting', pairingCode: null })
+      } catch (e) {
+        console.error(`[MOTA-FLOW] [User ${userId}] Erro ao gerar QR Code:`, e)
+      }
     }
 
     if (connection === 'close') {
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
-      console.log(`[MOTA-FLOW] Conexão fechada. Status: ${statusCode}`)
+      console.log(`[MOTA-FLOW] [User ${userId}] Conexão fechada. Status: ${statusCode}`)
       
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut
-      if (shouldReconnect) {
-        console.log('[MOTA-FLOW] Tentando reconectar automaticamente...')
-        setTimeout(() => connectToWhatsApp(userId, instanceId, reconnectPhone, true), 3000)
+      const isLoggedOut = statusCode === DisconnectReason.loggedOut || 
+                         statusCode === 401 || // Unauthorized
+                         statusCode === 403 || // Forbidden
+                         statusCode === 440    // Session expired
+
+      if (!isLoggedOut) {
+        console.log(`[MOTA-FLOW] [User ${userId}] Tentando reconectar automaticamente...`)
+        setTimeout(() => {
+          // Verificar se ainda é a mesma sessão antes de reconectar
+          if (sessions.get(userId) === sock) {
+            connectToWhatsApp(userId, instanceId, reconnectPhone, true)
+          }
+        }, 5000)
       } else {
-        console.log('[MOTA-FLOW] Logout detectado ou sessão encerrada.')
+        console.log(`[MOTA-FLOW] [User ${userId}] Logout detectado ou sessão encerrada permanentemente.`)
         await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null, pairingCode: null, phoneNumber: null })
         sessions.delete(userId)
-        // Limpar pasta de sessão se for logout real
-        if (fs.existsSync(sessionPath)) fs.rmSync(sessionPath, { recursive: true, force: true })
+        if (fs.existsSync(sessionPath)) {
+          try {
+            fs.rmSync(sessionPath, { recursive: true, force: true })
+          } catch (e) {}
+        }
       }
     }
 
     if (connection === 'open') {
-      console.log('[MOTA-FLOW] Conexão aberta com sucesso!')
+      console.log(`[MOTA-FLOW] [User ${userId}] Conexão aberta com sucesso!`)
       const phone = sock.user?.id.split(':')[0]
       await db.updateWhatsappInstance(instanceId, { status: 'connected', phoneNumber: phone, qrCode: null, pairingCode: null })
     }
@@ -257,12 +286,32 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     // Processar tanto notify quanto append para garantir que nada escape
     for (const msg of messages) {
-      if (!msg.message || msg.key.fromMe) continue
-      
-      const text = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '').trim()
-      console.log(`[MOTA-FLOW] Mensagem detectada [${type}] de ${msg.key.remoteJid}: ${text || 'mídia/outros'}`)
-      
-      await processMessage(sock, msg, userId, instanceId)
+      try {
+        if (!msg.message || msg.key.fromMe) continue
+        
+        // Ignorar mensagens de grupos se necessário (opcional, mas bom para bot pessoal)
+        if (msg.key.remoteJid?.endsWith('@g.us')) continue
+
+        const text = (
+          msg.message?.conversation || 
+          msg.message?.extendedTextMessage?.text || 
+          msg.message?.imageMessage?.caption ||
+          msg.message?.videoMessage?.caption ||
+          msg.message?.buttonsResponseMessage?.selectedButtonId ||
+          msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId ||
+          ''
+        ).trim()
+
+        if (!text && type === 'notify') {
+          console.log(`[MOTA-FLOW] [User ${userId}] Mensagem sem texto de ${msg.key.remoteJid}`)
+          continue
+        }
+
+        console.log(`[MOTA-FLOW] [User ${userId}] Mensagem detectada [${type}] de ${msg.key.remoteJid}: ${text || 'mídia/sem-texto'}`)
+        await processMessage(sock, msg, userId, instanceId)
+      } catch (err) {
+        console.error(`[MOTA-FLOW] [User ${userId}] Erro ao processar messages.upsert:`, err)
+      }
     }
   })
 
@@ -273,77 +322,147 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
 }
 
 async function processMessage(sock: any, msg: WAMessage, userId: number, instanceId: number) {
-  const from = msg.key.remoteJid!
-  const text = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '').trim()
-  if (!text) return
+  try {
+    const from = msg.key.remoteJid!
+    const text = (
+      msg.message?.conversation || 
+      msg.message?.extendedTextMessage?.text || 
+      msg.message?.imageMessage?.caption ||
+      msg.message?.videoMessage?.caption ||
+      msg.message?.buttonsResponseMessage?.selectedButtonId ||
+      msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId ||
+      ''
+    ).trim()
 
-  console.log(`[MOTA-FLOW] Processando texto: "${text}" de ${from}`)
+    if (!text) return
 
-  const state = messageStates.get(from)
-  const now = Date.now()
-  const COOLDOWN_24H = 24 * 60 * 60 * 1000
-  const isResetKeyword = ['menu', 'voltar', 'inicio', 'início'].includes(text.toLowerCase())
+    console.log(`[MOTA-FLOW] [User ${userId}] Processando texto: "${text}" de ${from}`)
 
-  if (state?.status === 'finished' && !isResetKeyword) {
-    if (state.lastInteraction && (now - state.lastInteraction < COOLDOWN_24H)) {
-      console.log(`[MOTA-FLOW] Usuário ${from} em cooldown. Ignorando.`)
+    const state = messageStates.get(from)
+    const now = Date.now()
+    const COOLDOWN_24H = 24 * 60 * 60 * 1000
+    const isResetKeyword = ['menu', 'voltar', 'inicio', 'início'].includes(text.toLowerCase())
+
+    if (state?.status === 'finished' && !isResetKeyword) {
+      if (state.lastInteraction && (now - state.lastInteraction < COOLDOWN_24H)) {
+        console.log(`[MOTA-FLOW] [User ${userId}] Usuário ${from} em cooldown. Ignorando.`)
+        return
+      }
+    }
+
+    const flows = await db.getUserMenuFlows(userId)
+    const activeFlow = flows.find(f => f.isActive)
+    
+    if (!activeFlow) {
+      console.log(`[MOTA-FLOW] [User ${userId}] Nenhum fluxo ativo encontrado no banco.`)
       return
     }
-  }
 
-  const flows = await db.getUserMenuFlows(userId)
-  const activeFlow = flows.find(f => f.isActive)
-  
-  if (!activeFlow) {
-    console.log(`[MOTA-FLOW] Nenhum fluxo ativo para o usuário ${userId}`)
-    return
-  }
-
-  const flowData = activeFlow.flowData as MenuFlowData
-  
-  if (!state || isResetKeyword) {
-    const rootMenu = flowData.nodes.find(n => n.id === flowData.rootNodeId)
-    if (rootMenu) {
-      await sendMenu(sock, from, rootMenu)
-      messageStates.set(from, { 
-        flowId: activeFlow.id, 
-        menuId: rootMenu.id, 
-        userId, 
-        instanceId,
-        status: 'active',
-        lastInteraction: now
-      })
+    // Parsing flowData if it's a string
+    let flowData: MenuFlowData
+    try {
+      flowData = typeof activeFlow.flowData === 'string' 
+        ? JSON.parse(activeFlow.flowData) 
+        : activeFlow.flowData as any as MenuFlowData
+    } catch (e) {
+      console.error(`[MOTA-FLOW] [User ${userId}] Erro ao parsear flowData:`, e)
+      return
     }
-    return
-  }
 
-  const currentMenu = flowData.nodes.find(n => n.id === state.menuId)
-  if (!currentMenu) return
-
-  const option = currentMenu.options.find(o => o.key === text.trim())
-  if (option) {
-    const nextMenu = flowData.nodes.find(n => n.id === option.nextNodeId)
-    if (nextMenu) {
-      await sendMenu(sock, from, nextMenu)
-      const isFinal = nextMenu.options.length === 0
-      messageStates.set(from, { 
-        ...state, 
-        menuId: nextMenu.id, 
-        status: isFinal ? 'finished' : 'active',
-        lastInteraction: now
-      })
+    if (!flowData || !flowData.menus || !flowData.rootMenuId) {
+      console.error(`[MOTA-FLOW] [User ${userId}] Estrutura de fluxo inválida.`)
+      return
     }
-  } else {
-    await sendMenu(sock, from, currentMenu)
+
+    // Se for palavra-chave de reset ou não tiver estado, começa do início
+    if (!state || isResetKeyword) {
+      const rootMenu = flowData.menus[flowData.rootMenuId]
+      if (rootMenu) {
+        await sendMenu(sock, from, rootMenu)
+        messageStates.set(from, { 
+          flowId: activeFlow.id, 
+          menuId: rootMenu.id, 
+          userId, 
+          instanceId,
+          status: 'active',
+          lastInteraction: now
+        })
+        console.log(`[MOTA-FLOW] [User ${userId}] Fluxo iniciado/resetado para ${from}`)
+      } else {
+        console.error(`[MOTA-FLOW] [User ${userId}] Menu raiz ${flowData.rootMenuId} não encontrado.`)
+      }
+      return
+    }
+
+    // Se estiver em um menu, verifica as opções
+    const currentMenu = flowData.menus[state.menuId]
+    if (!currentMenu) {
+      console.log(`[MOTA-FLOW] [User ${userId}] Menu atual ${state.menuId} não encontrado. Resetando.`)
+      messageStates.delete(from)
+      return
+    }
+
+    // Tentar encontrar opção por número ou por texto (case insensitive)
+    const option = currentMenu.options.find(o => 
+      o.number.toString() === text || 
+      o.text.toLowerCase() === text.toLowerCase()
+    )
+
+    if (option) {
+      console.log(`[MOTA-FLOW] [User ${userId}] Opção selecionada: ${option.number} - ${option.text}`)
+      
+      // Se tiver uma resposta direta na opção, envia primeiro
+      if (option.response) {
+        await sock.sendMessage(from, { text: option.response })
+      }
+
+      // Se tiver um próximo menu, envia e atualiza estado
+      if (option.nextMenuId && flowData.menus[option.nextMenuId]) {
+        const nextMenu = flowData.menus[option.nextMenuId]
+        await sendMenu(sock, from, nextMenu)
+        
+        const isFinal = !nextMenu.options || nextMenu.options.length === 0
+        messageStates.set(from, { 
+          ...state, 
+          menuId: nextMenu.id, 
+          status: isFinal ? 'finished' : 'active',
+          lastInteraction: now
+        })
+      } else {
+        // Se não tiver próximo menu, marca como finalizado
+        messageStates.set(from, { 
+          ...state, 
+          status: 'finished',
+          lastInteraction: now
+        })
+      }
+    } else {
+      // Se não for uma opção válida, repete o menu atual
+      console.log(`[MOTA-FLOW] [User ${userId}] Opção inválida de ${from}: "${text}". Repetindo menu.`)
+      await sendMenu(sock, from, currentMenu)
+    }
+  } catch (err) {
+    console.error(`[MOTA-FLOW] [User ${userId}] Erro crítico no processMessage:`, err)
   }
 }
 
 async function sendMenu(sock: any, to: string, menu: MenuNode) {
-  let text = `${menu.message}\n\n`
-  menu.options.forEach(opt => {
-    text += `*${opt.key}* - ${opt.value}\n`
-  })
-  await sock.sendMessage(to, { text: text.trim() })
+  try {
+    let text = `${menu.message}`
+    
+    if (menu.options && menu.options.length > 0) {
+      text += `\n\n`
+      // Ordenar opções por número
+      const sortedOptions = [...menu.options].sort((a, b) => a.number - b.number)
+      sortedOptions.forEach(opt => {
+        text += `*${opt.number}* - ${opt.text}\n`
+      })
+    }
+    
+    await sock.sendMessage(to, { text: text.trim() })
+  } catch (err) {
+    console.error(`[MOTA-FLOW] Erro ao enviar menu:`, err)
+  }
 }
 
 // WHATSAPP API
