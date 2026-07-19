@@ -226,7 +226,7 @@ function cleanPhoneNumber(num: string): string {
 }
 
 async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber?: string, isReconnect = false) {
-  const sessionPath = `sessions/session-${userId}`
+  const sessionPath = path.join(process.cwd(), 'sessions', `session_${userId}`)
 
   // Fechar socket antigo se existir para evitar leaks e conflitos
   const oldSock = sessions.get(userId)
@@ -290,39 +290,35 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
 
   if (!isReconnect && phoneNumber) {
     const cleanNumber = cleanPhoneNumber(phoneNumber)
-    setTimeout(async () => {
-      try {
-        console.log(`[MOTA-FLOW] [User ${userId}] Solicitando pairing code para ${cleanNumber}...`)
-        if (sock.authState.creds.registered) {
-          console.log(`[MOTA-FLOW] [User ${userId}] Socket já registrado, pulando pairing code`)
-          return
-        }
-        console.log(`[MOTA-FLOW] [User ${userId}] Chamando requestPairingCode...`)
-        const codePromise = sock.requestPairingCode(cleanNumber)
-        const code = await Promise.race([
-          codePromise,
-          new Promise<string>((_, reject) => 
-            setTimeout(() => reject(new Error('Timeout ao solicitar pairing code')), 30000)
-          )
-        ])
-        console.log(`[MOTA-FLOW] [User ${userId}] Pairing code recebido: ${code}`)
-        await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
-      } catch (err: any) {
-        console.error(`[MOTA-FLOW] [User ${userId}] Erro ao obter pairing code (tentativa 1):`, err.message)
-        setTimeout(async () => {
-          try {
-            if (sock.ws.isOpen) {
-              console.log(`[MOTA-FLOW] [User ${userId}] Tentando novamente...`)
-              const code2 = await sock.requestPairingCode(cleanNumber)
-              console.log(`[MOTA-FLOW] [User ${userId}] Pairing code recebido na tentativa 2: ${code2}`)
-              await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code2, qrCode: null })
-            }
-          } catch (e: any) {
-            console.error(`[MOTA-FLOW] [User ${userId}] Erro na tentativa 2:`, e.message)
+    // Aguardar o socket estar conectado antes de solicitar pairing code
+    const waitForConnection = setInterval(async () => {
+      if (sock.ws && sock.ws.isOpen) {
+        clearInterval(waitForConnection)
+        try {
+          console.log(`[MOTA-FLOW] [User ${userId}] Socket conectado, solicitando pairing code para ${cleanNumber}...`)
+          if (sock.authState.creds.registered) {
+            console.log(`[MOTA-FLOW] [User ${userId}] Socket já registrado, pulando pairing code`)
+            return
           }
-        }, 10000)
+          console.log(`[MOTA-FLOW] [User ${userId}] Chamando requestPairingCode...`)
+          const codePromise = sock.requestPairingCode(cleanNumber)
+          const code = await Promise.race([
+            codePromise,
+            new Promise<string>((_, reject) => 
+              setTimeout(() => reject(new Error('Timeout ao solicitar pairing code')), 30000)
+            )
+          ])
+          console.log(`[MOTA-FLOW] [User ${userId}] ✅ Pairing code recebido: ${code}`)
+          await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
+        } catch (err: any) {
+          console.error(`[MOTA-FLOW] [User ${userId}] ❌ Erro ao obter pairing code:`, err.message)
+          await db.updateWhatsappInstance(instanceId, { status: 'disconnected', pairingCode: null, qrCode: null })
+        }
       }
-    }, 10000)
+    }, 1000)
+    
+    // Timeout de segurança: se não conectar em 60 segundos, cancelar
+    setTimeout(() => clearInterval(waitForConnection), 60000)
   }
 
   sock.ev.on('connection.update', async (update) => {
