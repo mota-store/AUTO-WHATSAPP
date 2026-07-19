@@ -218,6 +218,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update
+    console.log(`[MOTA-FLOW] Update de conexão: ${connection || 'status'}`)
 
     if (qr) {
       const qrDataURL = await QRCode.toDataURL(qr)
@@ -225,16 +226,24 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     }
 
     if (connection === 'close') {
-      const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut
+      const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
+      console.log(`[MOTA-FLOW] Conexão fechada. Status: ${statusCode}`)
+      
+      const shouldReconnect = statusCode !== DisconnectReason.loggedOut
       if (shouldReconnect) {
+        console.log('[MOTA-FLOW] Tentando reconectar automaticamente...')
         setTimeout(() => connectToWhatsApp(userId, instanceId, reconnectPhone, true), 3000)
       } else {
-        await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null, pairingCode: null })
+        console.log('[MOTA-FLOW] Logout detectado ou sessão encerrada.')
+        await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null, pairingCode: null, phoneNumber: null })
         sessions.delete(userId)
+        // Limpar pasta de sessão se for logout real
+        if (fs.existsSync(sessionPath)) fs.rmSync(sessionPath, { recursive: true, force: true })
       }
     }
 
     if (connection === 'open') {
+      console.log('[MOTA-FLOW] Conexão aberta com sucesso!')
       const phone = sock.user?.id.split(':')[0]
       await db.updateWhatsappInstance(instanceId, { status: 'connected', phoneNumber: phone, qrCode: null, pairingCode: null })
     }
@@ -246,6 +255,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     if (type !== 'notify') return
     for (const msg of messages) {
       if (!msg.message || msg.key.fromMe) continue
+      console.log(`[MOTA-FLOW] Mensagem recebida de ${msg.key.remoteJid}: ${msg.message?.conversation || 'mídia/outros'}`)
       await processMessage(sock, msg, userId, instanceId)
     }
   })
@@ -253,21 +263,30 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
 
 async function processMessage(sock: any, msg: WAMessage, userId: number, instanceId: number) {
   const from = msg.key.remoteJid!
-  const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || ''
+  const text = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '').trim()
   if (!text) return
+
+  console.log(`[MOTA-FLOW] Processando texto: "${text}" de ${from}`)
 
   const state = messageStates.get(from)
   const now = Date.now()
   const COOLDOWN_24H = 24 * 60 * 60 * 1000
-  const isResetKeyword = ['menu', 'voltar', 'inicio', 'início'].includes(text.toLowerCase().trim())
+  const isResetKeyword = ['menu', 'voltar', 'inicio', 'início'].includes(text.toLowerCase())
 
   if (state?.status === 'finished' && !isResetKeyword) {
-    if (state.lastInteraction && (now - state.lastInteraction < COOLDOWN_24H)) return
+    if (state.lastInteraction && (now - state.lastInteraction < COOLDOWN_24H)) {
+      console.log(`[MOTA-FLOW] Usuário ${from} em cooldown. Ignorando.`)
+      return
+    }
   }
 
   const flows = await db.getUserMenuFlows(userId)
   const activeFlow = flows.find(f => f.isActive)
-  if (!activeFlow) return
+  
+  if (!activeFlow) {
+    console.log(`[MOTA-FLOW] Nenhum fluxo ativo para o usuário ${userId}`)
+    return
+  }
 
   const flowData = activeFlow.flowData as MenuFlowData
   
