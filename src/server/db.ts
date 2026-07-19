@@ -16,11 +16,15 @@ export async function getDb() {
       }
 
       const url = new URL(databaseUrl)
+      const sslConfig = url.searchParams.get("sslmode") === "require" ? { rejectUnauthorized: false } : undefined
+
       pool = mysql.createPool({
-        uri: databaseUrl,
-        ssl: {
-          rejectUnauthorized: false,
-        },
+        host: url.hostname,
+        user: url.username,
+        password: url.password,
+        database: url.pathname.substring(1),
+        port: parseInt(url.port),
+        ssl: sslConfig,
         connectionLimit: 10,
         connectTimeout: 30000,
         enableKeepAlive: true,
@@ -267,13 +271,18 @@ export async function syncSchema() {
     if (!pool) {
       const databaseUrl = process.env.DATABASE_URL
       if (!databaseUrl) {
-        throw new Error('DATABASE_URL não configurada')
+        throw new Error("DATABASE_URL não configurada")
       }
+      const url = new URL(databaseUrl)
+      const sslConfig = url.searchParams.get("sslmode") === "require" ? { rejectUnauthorized: false } : undefined
+
       pool = mysql.createPool({
-        uri: databaseUrl,
-        ssl: {
-          rejectUnauthorized: false,
-        },
+        host: url.hostname,
+        user: url.username,
+        password: url.password,
+        database: url.pathname.substring(1),
+        port: parseInt(url.port),
+        ssl: sslConfig,
         connectionLimit: 10,
         connectTimeout: 30000,
       })
