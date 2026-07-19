@@ -191,9 +191,9 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
   const version = baileysVersion
 
-  // CONFIGURAÇÃO PERSONALIZADA COM BASE NA COMPATIBILIDADE UBUNTU
+  // CONFIGURAÇÃO WINDOWS SOLICITADA PELO USUÁRIO
   const browserConfig: [string, string, string] = phoneNumber 
-    ? ['Google Chrome (MotaFlow)', '', ''] 
+    ? ['Google Chrome (Windows)', '', ''] 
     : ['MotaFlow', 'Chrome', '1.0.0']
 
   console.log(`[MOTA-FLOW] Iniciando socket com Opera: ${browserConfig.join(' ')}`)
@@ -225,7 +225,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     setTimeout(async () => {
       try {
         if (sock.authState.creds.registered) return
-        console.log(`[MOTA-FLOW] Solicitando Pairing Code (MotaFlow) para ${cleanNumber}...`)
+        console.log(`[MOTA-FLOW] Solicitando Pairing Code (Windows) para ${cleanNumber}...`)
         const code = await sock.requestPairingCode(cleanNumber)
         console.log(`[MOTA-FLOW] Pairing Code gerado: ${code}`)
         await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })

@@ -193,7 +193,7 @@ export default function Dashboard() {
       setPhoneNumber('')
       setShowPairingLoading(false)
       setIsConnecting(false)
-      toast.success('Conexão resetada. Tente novamente.')
+      // toast.success('Conexão resetada. Tente novamente.')
       
       // Forçar recarga dos dados do dashboard
       setTimeout(() => loadDashboard(), 500)
@@ -374,11 +374,11 @@ export default function Dashboard() {
                           <button 
                             onClick={() => handleConnect(true)}
                             disabled={isConnecting || !phoneNumber}
-                            className="w-full py-4 bg-primary text-white rounded-xl font-black text-sm shadow-lg shadow-primary/20 hover:opacity-90 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                            className="w-full py-4 bg-primary text-black rounded-xl font-black text-sm shadow-lg shadow-primary/20 hover:opacity-90 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:pointer-events-none"
                           >
                             {isConnecting ? (
                               <>
-                                <RefreshCw className="w-5 h-5 animate-spin" />
+                                <RefreshCw className="w-5 h-5 animate-spin text-black" />
                                 Enviando...
                               </>
                             ) : (
