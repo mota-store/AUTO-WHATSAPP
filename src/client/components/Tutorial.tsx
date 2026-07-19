@@ -4,8 +4,6 @@ import slide1 from '../assets/tutorial/slide-1.png'
 import slide2 from '../assets/tutorial/slide-2.png'
 import slide3 from '../assets/tutorial/slide-3.png'
 import slide4 from '../assets/tutorial/slide-4.png'
-import slide5 from '../assets/tutorial/slide-5.png'
-import slide6 from '../assets/tutorial/slide-6.png'
 
 interface TutorialSlide {
   title: string
@@ -66,95 +64,91 @@ export default function Tutorial({ isOpen, onClose }: TutorialProps) {
   const slide = tutorialSlides[currentSlide]
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center sm:p-4 animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-2 sm:p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={onClose}></div>
       
-      <div className="relative w-full max-w-2xl bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-[2rem] sm:rounded-[2.5rem] shadow-2xl animate-in slide-in-from-bottom duration-300 max-h-[90vh] overflow-y-auto pb-10">
+      <div className="relative w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl flex flex-col max-h-[95vh]">
         {/* Close Button */}
         <button 
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 text-zinc-500 hover:text-white hover:bg-white/10 rounded-xl transition-all z-10"
+          className="absolute top-2 right-2 p-1.5 text-zinc-500 hover:text-white hover:bg-white/10 rounded-lg transition-all z-10"
         >
-          <X className="w-5 h-5" />
+          <X className="w-4 h-4" />
         </button>
 
-        <div className="p-6 sm:p-8 space-y-6">
+        {/* Main Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {/* Header */}
-          <div className="space-y-2 pt-2">
-            <div className="flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-primary" />
-              <h2 className="text-2xl sm:text-3xl font-black tracking-tight">{slide.title}</h2>
-            </div>
-            <p className="text-zinc-500 text-sm font-medium">Passo {currentSlide + 1} de {tutorialSlides.length}</p>
+          <div className="space-y-1 pt-1">
+            <h2 className="text-lg font-black tracking-tight">{slide.title}</h2>
+            <p className="text-zinc-500 text-xs font-medium">Passo {currentSlide + 1} de {tutorialSlides.length}</p>
           </div>
 
-          {/* Image */}
-          <div className="relative w-full bg-gradient-to-br from-primary/10 to-emerald-500/10 rounded-2xl border-2 border-primary/30 flex items-center justify-center overflow-hidden">
+          {/* Image - Compacta */}
+          <div className="relative w-full bg-gradient-to-br from-primary/10 to-emerald-500/10 rounded-lg border border-primary/30 flex items-center justify-center overflow-hidden">
             <img 
               src={slide.image} 
               alt={slide.title}
-              className="w-full h-auto max-h-[50vh] object-contain"
+              className="w-full h-auto max-h-[35vh] object-contain"
             />
           </div>
 
-          {/* Description */}
-          <div className="space-y-4">
-            <p className="text-zinc-300 text-base leading-relaxed font-medium">{slide.description}</p>
-            
-            {/* Tips */}
-            {slide.tips && slide.tips.length > 0 && (
-              <div className="bg-primary/10 border border-primary/30 rounded-xl p-4 space-y-2">
-                <p className="text-xs font-black text-primary uppercase tracking-widest">💡 Dicas</p>
-                <ul className="space-y-1">
-                  {slide.tips.map((tip, idx) => (
-                    <li key={idx} className="text-sm text-zinc-300 flex items-start gap-2">
-                      <span className="text-primary font-black mt-0.5">•</span>
-                      <span>{tip}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-
-          {/* Progress Bar */}
-          <div className="w-full bg-zinc-800 rounded-full h-1 overflow-hidden">
-            <div 
-              className="bg-gradient-to-r from-primary to-emerald-500 h-full transition-all duration-300"
-              style={{ width: `${((currentSlide + 1) / tutorialSlides.length) * 100}%` }}
-            ></div>
-          </div>
-
-          {/* Navigation */}
-          <div className="flex items-center justify-between gap-3">
-            <button 
-              onClick={handlePrev}
-              disabled={currentSlide === 0}
-              className="flex-1 px-6 py-3 bg-zinc-800/50 text-white rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95"
-            >
-              <ChevronLeft className="w-4 h-4" /> Anterior
-            </button>
-            
-            <div className="flex gap-1">
-              {tutorialSlides.map((_, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setCurrentSlide(idx)}
-                  className={`w-2 h-2 rounded-full transition-all ${
-                    idx === currentSlide ? 'bg-primary w-6' : 'bg-zinc-700 hover:bg-zinc-600'
-                  }`}
-                  aria-label={`Ir para slide ${idx + 1}`}
-                />
-              ))}
+          {/* Description - Menor */}
+          <p className="text-zinc-300 text-sm leading-snug font-medium">{slide.description}</p>
+          
+          {/* Tips - Compacto */}
+          {slide.tips && slide.tips.length > 0 && (
+            <div className="bg-primary/10 border border-primary/30 rounded-lg p-2.5 space-y-1">
+              <p className="text-[10px] font-black text-primary uppercase tracking-widest">💡 Dicas</p>
+              <ul className="space-y-0.5">
+                {slide.tips.map((tip, idx) => (
+                  <li key={idx} className="text-xs text-zinc-300 flex items-start gap-1.5">
+                    <span className="text-primary font-black mt-0.5">•</span>
+                    <span>{tip}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
+          )}
+        </div>
 
-            <button 
-              onClick={currentSlide === tutorialSlides.length - 1 ? onClose : handleNext}
-              className="flex-1 px-6 py-3 bg-primary text-white rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:bg-primary/90 transition-all active:scale-95"
-            >
-              {currentSlide === tutorialSlides.length - 1 ? 'Finalizar' : 'Próximo'} <ChevronRight className="w-4 h-4" />
-            </button>
+        {/* Progress Bar */}
+        <div className="w-full bg-zinc-800 h-0.5 overflow-hidden">
+          <div 
+            className="bg-gradient-to-r from-primary to-emerald-500 h-full transition-all duration-300"
+            style={{ width: `${((currentSlide + 1) / tutorialSlides.length) * 100}%` }}
+          ></div>
+        </div>
+
+        {/* Navigation - Fixo no Rodapé */}
+        <div className="flex items-center justify-between gap-2 p-3 border-t border-zinc-800 bg-zinc-900/50">
+          <button 
+            onClick={handlePrev}
+            disabled={currentSlide === 0}
+            className="px-3 py-1.5 bg-zinc-800/50 text-white rounded-lg font-black text-xs flex items-center justify-center gap-1 hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95"
+          >
+            <ChevronLeft className="w-3 h-3" /> Anterior
+          </button>
+          
+          <div className="flex gap-0.5">
+            {tutorialSlides.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => setCurrentSlide(idx)}
+                className={`w-1.5 h-1.5 rounded-full transition-all ${
+                  idx === currentSlide ? 'bg-primary w-4' : 'bg-zinc-700 hover:bg-zinc-600'
+                }`}
+                aria-label={`Ir para slide ${idx + 1}`}
+              />
+            ))}
           </div>
+
+          <button 
+            onClick={currentSlide === tutorialSlides.length - 1 ? onClose : handleNext}
+            className="px-3 py-1.5 bg-primary text-white rounded-lg font-black text-xs flex items-center justify-center gap-1 hover:bg-primary/90 transition-all active:scale-95"
+          >
+            {currentSlide === tutorialSlides.length - 1 ? 'Fechar' : 'Próximo'} <ChevronRight className="w-3 h-3" />
+          </button>
         </div>
       </div>
     </div>

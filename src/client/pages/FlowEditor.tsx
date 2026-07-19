@@ -425,16 +425,16 @@ export default function FlowEditor() {
                 </div>
               ) : (
                 /* Editor Passo a Passo */
-                <div className="glass-card rounded-[2.5rem] p-6 sm:p-10 border border-border/50 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="glass-card rounded-xl p-3 border border-border/50 space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div>
-                    <h2 className="text-3xl font-black tracking-tight mb-2">{selectedMenu.title}</h2>
-                    <p className="text-muted-foreground font-medium">Escreva o que o robô vai responder nesta etapa.</p>
+                    <h2 className="text-lg font-black tracking-tight mb-1">{selectedMenu.title}</h2>
+                    <p className="text-muted-foreground font-medium text-xs">Escreva o que o robô vai responder nesta etapa.</p>
                   </div>
 
-                  <div className="space-y-6">
-                    <div className="space-y-3">
-                      <label className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
-                        <MessageSquare className="w-4 h-4" /> Mensagem que o robô envia
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1">
+                        <MessageSquare className="w-3 h-3" /> Mensagem
                       </label>
                       <textarea 
                         value={selectedMenu.message}
@@ -443,14 +443,14 @@ export default function FlowEditor() {
                           newMenus[selectedMenuId].message = e.target.value;
                           setFlowData({ ...flowData, menus: newMenus });
                         }}
-                        className="w-full px-6 py-5 bg-background border-2 border-border rounded-3xl font-medium h-40 focus:border-primary outline-none transition-all text-lg"
+                        className="w-full px-3 py-2 bg-background border border-border rounded-lg font-medium h-24 focus:border-primary outline-none transition-all text-sm"
                         placeholder="Ex: Olá! Como posso te ajudar?"
                       />
                     </div>
 
-                    <div className="space-y-4 pt-4">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground">Opções para o cliente escolher:</h3>
+                    <div className="space-y-2 pt-2">
+                      <div className="flex justify-between items-center gap-2">
+                        <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground">Opções:</h3>
                         <button 
                           onClick={() => {
                             const newId = `opt_${Date.now()}`;
@@ -463,21 +463,21 @@ export default function FlowEditor() {
                             });
                             setFlowData({ ...flowData, menus: newMenus });
                           }}
-                          className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-xl font-black text-xs hover:bg-primary hover:text-white transition-all"
+                          className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-lg font-black text-[10px] hover:bg-primary hover:text-white transition-all"
                         >
-                          <Plus className="w-4 h-4" /> Adicionar Opção
+                          <Plus className="w-3 h-3" /> Opção
                         </button>
                       </div>
 
-                      <div className="grid grid-cols-1 gap-4">
+                      <div className="grid grid-cols-1 gap-2">
                         {selectedMenu.options.map((option, index) => (
-                          <div key={option.id} className="group bg-muted/20 hover:bg-muted/40 p-5 rounded-[2rem] border border-border/50 transition-all">
-                            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                              <div className="w-12 h-12 bg-white border-2 border-primary rounded-2xl flex items-center justify-center font-black text-primary text-xl shadow-sm">
+                          <div key={option.id} className="group bg-muted/20 hover:bg-muted/40 p-2 rounded-lg border border-border/50 transition-all">
+                            <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                              <div className="w-7 h-7 bg-white border-2 border-primary rounded-lg flex items-center justify-center font-black text-primary text-xs shadow-sm">
                                 {option.number}
                               </div>
                               <div className="flex-1 w-full">
-                                <label className="text-[10px] font-black uppercase text-muted-foreground mb-1 block">Texto da Opção</label>
+                                <label className="text-[8px] font-black uppercase text-muted-foreground mb-0.5 block">Texto</label>
                                 <input 
                                   type="text"
                                   value={option.text}
@@ -486,7 +486,7 @@ export default function FlowEditor() {
                                     newMenus[selectedMenuId].options[index].text = e.target.value;
                                     setFlowData({ ...flowData, menus: newMenus });
                                   }}
-                                  className="w-full bg-transparent border-b-2 border-border focus:border-primary outline-none py-1 font-black text-lg transition-all"
+                                  className="w-full bg-transparent border-b border-border focus:border-primary outline-none py-0.5 font-bold text-xs transition-all"
                                 />
                               </div>
                               <div className="flex gap-2 w-full sm:w-auto justify-end">
