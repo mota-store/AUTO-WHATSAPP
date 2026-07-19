@@ -8,7 +8,6 @@ import { exec } from 'child_process'
 import { promisify } from 'util'
 import fs from 'fs'
 import path from 'path'
-import nodemailer from 'nodemailer'
 import { fileURLToPath } from 'url'
 import makeWASocket, {
   DisconnectReason,
@@ -20,7 +19,6 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys'
 import pino from 'pino'
 import { Boom } from '@hapi/boom'
-import type { ConnectionState, WAConnectionState } from '@whiskeysockets/baileys'
 import QRCode from 'qrcode'
 
 const execAsync = promisify(exec)
@@ -41,28 +39,24 @@ const __dirname = path.dirname(__filename)
 
 console.log('🚀 [MOTA-FLOW] Iniciando servidor...')
 
-// Middleware
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }))
 app.use(express.json({ limit: '10mb' }))
 
-// Baileys version - PRE-LOADED on bootstrap
-let baileysVersion: [number, number, number] = [2, 2413, 1] // safe default
+let baileysVersion: [number, number, number] = [2, 2413, 1]
 
 async function preloadBaileysVersion() {
   try {
-    const start = Date.now()
     const result = await Promise.race([
       fetchLatestBaileysVersion(),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000))
     ])
     baileysVersion = (result as any).version
-    console.log(`✅ [MOTA-FLOW] Versão Baileys pré-carregada em ${Date.now() - start}ms: ${baileysVersion.join('.')}`)
+    console.log(`✅ [MOTA-FLOW] Versão Baileys: ${baileysVersion.join('.')}`)
   } catch (err) {
-    console.log('⚠️ [MOTA-FLOW] Usando versão fallback Baileys:', baileysVersion.join('.'))
+    console.log('⚠️ [MOTA-FLOW] Usando versão fallback:', baileysVersion.join('.'))
   }
 }
 
-// Auth middleware
 async function authMiddleware(req: Request, res: Response, next: NextFunction) {
   const token = extractToken(req.headers.authorization)
   if (!token) return res.status(401).json({ message: 'Token não fornecido' })
@@ -72,12 +66,11 @@ async function authMiddleware(req: Request, res: Response, next: NextFunction) {
   next()
 }
 
-// ============ AUTH ROUTES ============
-
+// AUTH ROUTES
 app.post('/api/auth/register', async (req: Request, res: Response) => {
   try {
     const { email, password, name } = req.body
-    if (!email || !password || !name) return res.status(400).json({ message: 'Campos obrigatórios faltando' })
+    if (!email || !password || !name) return res.status(400).json({ message: 'Campos obrigatórios' })
     const existingUser = await db.getUserByEmail(email)
     if (existingUser) return res.status(400).json({ message: 'Email já cadastrado' })
     const passwordHash = await hashPassword(password)
@@ -87,8 +80,7 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     const token = await createToken(newUser.id, newUser.email)
     res.json({ token, user: { id: newUser.id, email: newUser.email, name: newUser.name } })
   } catch (error: any) {
-    console.error('[REGISTER ERROR]', error?.message, error?.stack)
-    res.status(500).json({ message: 'Erro ao criar usuário', detail: error?.message })
+    res.status(500).json({ message: 'Erro ao criar usuário' })
   }
 })
 
@@ -102,8 +94,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     const token = await createToken(user.id, user.email)
     res.json({ token, user: { id: user.id, email: user.email, name: user.name } })
   } catch (error: any) {
-    console.error('[LOGIN ERROR]', error?.message, error?.stack)
-    res.status(500).json({ message: 'Erro ao fazer login', detail: error?.message })
+    res.status(500).json({ message: 'Erro ao fazer login' })
   }
 })
 
@@ -129,8 +120,7 @@ app.get('/api/dashboard', authMiddleware, async (req: Request, res: Response) =>
   }
 })
 
-// ============ FLOWS ROUTES ============
-
+// FLOWS ROUTES
 app.get('/api/flows', authMiddleware, async (req: Request, res: Response) => {
   try {
     const user = (req as any).user as AuthPayload
@@ -163,8 +153,7 @@ app.post('/api/flows/:flowId/activate', authMiddleware, async (req: Request, res
   }
 })
 
-// ============ WHATSAPP CORE LOGIC ============
-
+// WHATSAPP CORE
 function cleanPhoneNumber(num: string): string {
   return num.replace(/\D/g, '')
 }
@@ -176,10 +165,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     if (fs.existsSync(sessionPath)) {
       try {
         fs.rmSync(sessionPath, { recursive: true, force: true })
-        console.log(`[MOTA-FLOW] Sessão antiga limpa para o usuário ${userId}`)
-      } catch (e) {
-        console.error(`[MOTA-FLOW] Erro ao limpar sessão ${userId}:`, e)
-      }
+      } catch (e) {}
     }
   }
 
@@ -189,17 +175,14 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   }
 
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
-  const version = baileysVersion
-
-  // CONFIGURAÇÃO MAC OS (ALTA COMPATIBILIDADE PARA FURA BLOQUEIO)
-  const browserConfig: [string, string, string] = phoneNumber 
-    ? ['Mac OS', 'Chrome', '121.0.0'] 
-    : ['MotaFlow', 'Chrome', '1.0.0']
-
-  console.log(`[MOTA-FLOW] Iniciando socket com Opera: ${browserConfig.join(' ')}`)
+  
+  // CONFIGURAÇÃO UBUNTU (200% GARANTIDA PELO USUÁRIO)
+  const browserConfig = phoneNumber 
+    ? Browsers.ubuntu('Chrome') 
+    : ['MotaFlow', 'Chrome', '1.0.0'] as [string, string, string]
 
   const sock = makeWASocket({
-    version,
+    version: baileysVersion,
     auth: {
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
@@ -207,34 +190,20 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     logger: pino({ level: 'silent' }),
     browser: browserConfig,
     connectTimeoutMs: 60000,
-    keepAliveIntervalMs: 30000,
     printQRInTerminal: false,
-    maxMsgRetryCount: 5,
-    retryRequestDelayMs: 2000,
   })
 
   sessions.set(userId, sock)
-  
   const reconnectPhone = phoneNumber
 
   if (!isReconnect && phoneNumber) {
     const cleanNumber = cleanPhoneNumber(phoneNumber)
-    console.log(`[MOTA-FLOW] Agendando Pairing Code (Opera) para: ${cleanNumber}`)
-    
-    // Ajustado para 7 segundos para equilibrar velocidade e estabilidade (evita rejeição do WA)
     setTimeout(async () => {
       try {
         if (sock.authState.creds.registered) return
-        console.log(`[MOTA-FLOW] Solicitando Pairing Code (Mac OS) para ${cleanNumber}...`)
         const code = await sock.requestPairingCode(cleanNumber)
-        console.log(`[MOTA-FLOW] Pairing Code gerado com sucesso: ${code}`)
         await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
       } catch (err: any) {
-        console.error('[MOTA-FLOW] ERRO CRÍTICO PAIRING CODE:', err?.message || err)
-        if (err?.message?.includes('429')) {
-          console.error('[MOTA-FLOW] Bloqueio por excesso de tentativas (Rate Limit)')
-        }
-        // Segunda tentativa com 10s de delay
         setTimeout(async () => {
           try {
             if (sock.ws.isOpen) {
@@ -257,8 +226,6 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
 
     if (connection === 'close') {
       const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut
-      console.log(`[MOTA-FLOW] Conexão fechada. Reconnect: ${shouldReconnect}`)
-      
       if (shouldReconnect) {
         setTimeout(() => connectToWhatsApp(userId, instanceId, reconnectPhone, true), 3000)
       } else {
@@ -268,11 +235,8 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     }
 
     if (connection === 'open') {
-      console.log(`[MOTA-FLOW] WhatsApp conectado para o usuário ${userId}`)
       const phone = sock.user?.id.split(':')[0]
       await db.updateWhatsappInstance(instanceId, { status: 'connected', phoneNumber: phone, qrCode: null, pairingCode: null })
-      await sock.waitForSocketOpen()
-      await sock.sendPresenceUpdate('available')
     }
   })
 
@@ -290,21 +254,15 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
 async function processMessage(sock: any, msg: WAMessage, userId: number, instanceId: number) {
   const from = msg.key.remoteJid!
   const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || ''
-  
   if (!text) return
 
   const state = messageStates.get(from)
   const now = Date.now()
   const COOLDOWN_24H = 24 * 60 * 60 * 1000
-
-  // Reinício manual
   const isResetKeyword = ['menu', 'voltar', 'inicio', 'início'].includes(text.toLowerCase().trim())
 
   if (state?.status === 'finished' && !isResetKeyword) {
-    if (state.lastInteraction && (now - state.lastInteraction < COOLDOWN_24H)) {
-      console.log(`[MOTA-FLOW] Ignorando mensagem de ${from} (Cooldown ativo)`)
-      return
-    }
+    if (state.lastInteraction && (now - state.lastInteraction < COOLDOWN_24H)) return
   }
 
   const flows = await db.getUserMenuFlows(userId)
@@ -358,24 +316,21 @@ async function sendMenu(sock: any, to: string, menu: MenuNode) {
   await sock.sendMessage(to, { text: text.trim() })
 }
 
-// ============ API ROUTES FOR WHATSAPP ============
-
+// WHATSAPP API
 app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Response) => {
   const user = (req as any).user as AuthPayload
   const { phoneNumber } = req.body
-  
   let instance = await db.getWhatsappInstance(user.userId)
   if (!instance) {
     await db.createWhatsappInstance(user.userId)
     instance = await db.getWhatsappInstance(user.userId)
   }
-
   if (instance) {
     await db.updateWhatsappInstance(instance.id, { qrCode: null, pairingCode: null, status: 'connecting' })
     connectToWhatsApp(user.userId, instance.id, phoneNumber)
-    res.json({ message: 'Iniciando conexão...' })
+    res.json({ message: 'Iniciando...' })
   } else {
-    res.status(500).json({ message: 'Erro ao criar instância' })
+    res.status(500).json({ message: 'Erro' })
   }
 })
 
@@ -387,27 +342,18 @@ app.post('/api/whatsapp/reset', authMiddleware, async (req: Request, res: Respon
       const sock = sessions.get(user.userId)
       if (sock) {
         sock.ev.removeAllListeners('connection.update')
-        sock.ev.removeAllListeners('creds.update')
-        sock.ev.removeAllListeners('messages.upsert')
         try { sock.ws.close() } catch (e) {}
         sessions.delete(user.userId)
       }
       const sessionPath = `sessions/session-${user.userId}`
-      if (fs.existsSync(sessionPath)) {
-        fs.rmSync(sessionPath, { recursive: true, force: true })
-      }
-      await db.updateWhatsappInstance(instance.id, { 
-        status: 'disconnected', 
-        qrCode: null, 
-        pairingCode: null,
-        phoneNumber: null 
-      })
-      res.json({ message: 'Instância resetada com sucesso' })
+      if (fs.existsSync(sessionPath)) fs.rmSync(sessionPath, { recursive: true, force: true })
+      await db.updateWhatsappInstance(instance.id, { status: 'disconnected', qrCode: null, pairingCode: null, phoneNumber: null })
+      res.json({ message: 'Resetado' })
     } else {
-      res.status(404).json({ message: 'Instância não encontrada' })
+      res.status(404).json({ message: 'Não encontrado' })
     }
   } catch (error) {
-    res.status(500).json({ message: 'Erro ao resetar instância' })
+    res.status(500).json({ message: 'Erro' })
   }
 })
 
@@ -416,38 +362,24 @@ app.post('/api/whatsapp/disconnect', authMiddleware, async (req: Request, res: R
   try {
     const instance = await db.getWhatsappInstance(user.userId)
     const sock = sessions.get(user.userId)
-    
     if (sock) {
-      // Remover ouvintes para evitar loops de reconexão durante o logout proposital
       sock.ev.removeAllListeners('connection.update')
       await sock.logout()
       try { sock.ws.close() } catch (e) {}
       sessions.delete(user.userId)
     }
-
-    if (instance) {
-      await db.updateWhatsappInstance(instance.id, { 
-        status: 'disconnected', 
-        qrCode: null, 
-        pairingCode: null 
-      })
-    }
-    
-    res.json({ message: 'Desconectado com sucesso' })
+    if (instance) await db.updateWhatsappInstance(instance.id, { status: 'disconnected', qrCode: null, pairingCode: null })
+    res.json({ message: 'Desconectado' })
   } catch (error) {
-    console.error('[DISCONNECT ERROR]', error)
-    res.status(500).json({ message: 'Erro ao desconectar' })
+    res.status(500).json({ message: 'Erro' })
   }
 })
 
-// Serve static files from Vite build
 app.use(express.static(path.join(__dirname, 'client')))
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'client', 'index.html'))
-})
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'client', 'index.html')))
 
 app.listen(PORT, () => {
   preloadBaileysVersion().then(() => {
-    console.log(`🚀 [MOTA-FLOW] Servidor rodando na porta ${PORT}`)
+    console.log(`🚀 [MOTA-FLOW] Porta ${PORT}`)
   })
 })
