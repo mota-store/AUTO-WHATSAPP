@@ -160,6 +160,34 @@ app.get('/api/flows', authMiddleware, async (req: Request, res: Response) => {
   }
 })
 
+app.get('/api/flows/:flowId', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const flowId = parseInt(req.params.flowId)
+    const flow = await db.getMenuFlow(flowId)
+    if (!flow) return res.status(404).json({ message: 'Fluxo não encontrado' })
+    
+    // Garantir que flowData seja um objeto
+    if (typeof flow.flowData === 'string') {
+      flow.flowData = JSON.parse(flow.flowData)
+    }
+    
+    res.json(flow)
+  } catch (error: any) {
+    res.status(500).json({ message: 'Erro ao buscar fluxo' })
+  }
+})
+
+app.put('/api/flows/:flowId', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const flowId = parseInt(req.params.flowId)
+    const { name, description, flowData } = req.body
+    await db.updateMenuFlow(flowId, { name, description, flowData })
+    res.json({ message: 'Fluxo atualizado' })
+  } catch (error: any) {
+    res.status(500).json({ message: 'Erro ao atualizar fluxo' })
+  }
+})
+
 app.post('/api/flows', authMiddleware, async (req: Request, res: Response) => {
   try {
     const user = (req as any).user as AuthPayload
