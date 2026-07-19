@@ -259,7 +259,8 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
   
   // CONFIGURAÇÃO UBUNTU CHROME (Para melhor compatibilidade com código de pareamento)
-  const browserConfig = Browsers.ubuntu('Chrome')
+  // Usar uma string de navegador altamente compatível
+  const browserConfig = ['Linux', 'Chrome', '120.0.0.0']  // Simular Chrome 120 no Linux
 
   const sock = makeWASocket({
     version: baileysVersion,
@@ -271,9 +272,11 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     browser: browserConfig,
     connectTimeoutMs: 60000,
     printQRInTerminal: false,
-    syncFullHistory: true,
+    syncFullHistory: false,  // Desativar sincronização completa para pareamento mais rápido
     markOnlineOnConnect: true,
-    shouldSyncHistoryMessage: () => true,
+    shouldSyncHistoryMessage: () => false,  // Não sincronizar mensagens de histórico durante pareamento
+    qrTimeout: 60000,  // Timeout para QR code
+    defaultQueryTimeoutMs: 60000,  // Timeout padrão para queries
   })
 
   sessions.set(userId, sock)
