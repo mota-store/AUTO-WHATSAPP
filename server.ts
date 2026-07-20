@@ -78,7 +78,7 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     const newUser = await db.getUserByEmail(email)
     if (!newUser) throw new Error('Erro ao criar usuário')
     const token = await createToken(newUser.id, newUser.email)
-    res.json({ token, user: { id: newUser.id, email: newUser.email, name: newUser.name } })
+    res.json({ token, user: { id: newUser.id, email: newUser.email, name: newUser.name, avatar: newUser.avatar } })
   } catch (error: any) {
     res.status(500).json({ message: 'Erro ao criar usuário' })
   }
@@ -92,7 +92,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
       return res.status(401).json({ message: 'Credenciais inválidas' })
     }
     const token = await createToken(user.id, user.email)
-    res.json({ token, user: { id: user.id, email: user.email, name: user.name } })
+    res.json({ token, user: { id: user.id, email: user.email, name: user.name, avatar: user.avatar } })
   } catch (error: any) {
     res.status(500).json({ message: 'Erro ao fazer login' })
   }

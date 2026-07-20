@@ -26,6 +26,9 @@ export default function Login() {
       if (response.ok) {
         localStorage.setItem('token', data.token)
         localStorage.setItem('user', JSON.stringify(data.user))
+        if (data.user && data.user.avatar) {
+          localStorage.setItem('profileImage', data.user.avatar)
+        }
         toast.success('Login realizado!')
         navigate('/dashboard')
       } else {

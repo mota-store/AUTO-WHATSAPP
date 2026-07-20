@@ -58,6 +58,17 @@ export default function Dashboard() {
   const loadDashboard = async () => {
     try {
       const token = localStorage.getItem('token')
+      
+      // Carregar perfil do usuário para garantir que o avatar esteja atualizado
+      fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(res => res.json()).then(userData => {
+        if (userData && userData.avatar) {
+          localStorage.setItem('profileImage', userData.avatar)
+          localStorage.setItem('user', JSON.stringify(userData))
+        }
+      }).catch(() => {})
+
       const response = await fetch('/api/dashboard', {
         headers: { Authorization: `Bearer ${token}` },
       })

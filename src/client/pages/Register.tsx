@@ -35,6 +35,9 @@ export default function Register() {
       if (response.ok) {
         localStorage.setItem('token', data.token)
         localStorage.setItem('user', JSON.stringify(data.user))
+        if (data.user && data.user.avatar) {
+          localStorage.setItem('profileImage', data.user.avatar)
+        }
         toast.success('Conta criada!')
         navigate('/dashboard')
       } else {
