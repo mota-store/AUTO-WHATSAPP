@@ -151,39 +151,59 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
         const firstLine = lines[0].toLowerCase()
         
         if (firstLine.includes('se responder') || firstLine.includes('se escolher')) {
-          // Extract number from trigger line, e.g., "Se responder 1️⃣ - Individual"
+          // 1. Tentar vincular por número (ex: "Se responder 1")
           const numMatch = /(?:se responder|se escolher)[^\d]*([0-9]️⃣|[0-9])/.exec(firstLine)
-          if (numMatch) {
-            const targetNum = parseInt(numMatch[1].replace(/[^0-9]/g, ""))
+          
+          // 2. Tentar vincular por texto (ex: "Se responder Comprar uma assinatura")
+          const textTrigger = lines[0].replace(/^(se responder|se escolher)\s+/i, '').trim()
+          
+          let linked = false
+          
+          // Procurar em todos os menus anteriores
+          for (let i = 0; i < index; i++) { 
+            const prevMenuId = menuMapping[i]
+            const options = menus[prevMenuId].options
             
-            let linked = false
-            // Look through all previously defined menus to find the option to link
-            for (let i = 0; i < index; i++) { 
-              const prevMenuId = menuMapping[i]
-              const option = menus[prevMenuId].options.find(o => o.number === targetNum)
+            // Tentar achar por número primeiro
+            if (numMatch) {
+              const targetNum = parseInt(numMatch[1].replace(/[^0-9]/g, ""))
+              const option = options.find(o => o.number === targetNum)
               if (option && !option.nextMenuId) {
                 option.nextMenuId = menuMapping[index]
                 linked = true
                 break
               }
             }
-            // If not linked to a specific number, try to link to the previous menu's options
-            if (!linked) {
-              const prevMenuId = menuMapping[index - 1]
-              if (prevMenuId) {
-                menus[prevMenuId].options.forEach(opt => {
-                  if (!opt.nextMenuId) opt.nextMenuId = menuMapping[index]
-                })
+            
+            // Se não achou por número, tentar por texto
+            if (!linked && textTrigger) {
+              const option = options.find(o => 
+                o.text.toLowerCase().includes(textTrigger.toLowerCase()) || 
+                textTrigger.toLowerCase().includes(o.text.toLowerCase())
+              )
+              if (option && !option.nextMenuId) {
+                option.nextMenuId = menuMapping[index]
+                linked = true
+                break
               }
             }
-          } else if (firstLine.includes('qualquer uma') || firstLine.includes('após escolher')) {
-            // Link all options from the previous section to this one if they don't have a nextMenuId
+          }
+          
+          // 3. Fallback: Vincular ao menu imediatamente anterior se nada funcionou
+          if (!linked) {
             const prevMenuId = menuMapping[index - 1]
             if (prevMenuId) {
               menus[prevMenuId].options.forEach(opt => {
                 if (!opt.nextMenuId) opt.nextMenuId = menuMapping[index]
               })
             }
+          }
+        } else if (firstLine.includes('qualquer uma') || firstLine.includes('após escolher')) {
+          const prevMenuId = menuMapping[index - 1]
+          if (prevMenuId) {
+            menus[prevMenuId].options.forEach(opt => {
+              if (!opt.nextMenuId) opt.nextMenuId = menuMapping[index]
+            })
           }
         }
 
@@ -197,18 +217,7 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
         }
       })
 
-      // Final pass: Apply global attachment to all leaf options (options without nextMenuId)
-      if (attachment) {
-        Object.values(menus).forEach(menu => {
-          menu.options.forEach(opt => {
-            if (!opt.nextMenuId) {
-              opt.attachmentName = attachment.name
-              opt.attachmentData = attachment.data
-            }
-          })
-        })
-      }
-
+      // Final pass: Clean up and logging
       console.log('[MOTA-FLOW] Fluxo gerado com sucesso:', { rootMenuId: 'menu_0', menus })
       onGenerate({
         rootMenuId: 'menu_0',
