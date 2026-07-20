@@ -430,6 +430,12 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
 async function processMessage(sock: any, msg: WAMessage, userId: number, instanceId: number) {
   try {
     const from = msg.key.remoteJid!
+    
+    // Ignorar mensagens de grupos (@g.us) e canais (@newsletter)
+    if (from.endsWith('@g.us') || from.endsWith('@newsletter')) {
+      return
+    }
+
     const text = (
       msg.message?.conversation || 
       msg.message?.extendedTextMessage?.text || 
