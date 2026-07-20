@@ -158,7 +158,6 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
           const numMatch = /(?:se responder|se escolher)[^\d]*([0-9]️⃣|[0-9])/.exec(firstLine)
           
           // 2. Tentar vincular por texto (ex: "Se responder Comprar uma assinatura")
-          // Limpar o gatilho de emojis e espaços para busca flexível
           const cleanTrigger = lines[0]
             .replace(/^(se responder|se escolher)\s+/i, '')
             .replace(/[0-9]️⃣|[0-9][\.\)\-\s]?/g, '')
@@ -167,28 +166,24 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
           
           let linked = false
           
-          // Procurar em TODOS os menus já criados (não apenas os anteriores imediatos)
-          for (const prevMenuId in menus) {
-            const options = menus[prevMenuId].options
-            
-            // Tentar por número primeiro (se houver número no gatilho)
-            if (numMatch) {
-              const targetNum = parseInt(numMatch[1].replace(/[^0-9]/g, ""))
-              const option = options.find(o => o.number === targetNum)
-              if (option && !option.nextMenuId) {
-                option.nextMenuId = menuMapping[index]
-                linked = true
-                break
-              }
+          // 1. Prioridade: Procurar em TODOS os menus criados por texto idêntico ou parcial
+          for (const mId in menus) {
+            const option = menus[mId].options.find(o => {
+              const cleanOpt = o.text.toLowerCase().replace(/[0-9]️⃣|[0-9][\.\)\-\s]?/g, '').trim()
+              return cleanOpt === cleanTrigger || cleanOpt.includes(cleanTrigger) || cleanTrigger.includes(cleanOpt)
+            })
+            if (option && !option.nextMenuId) {
+              option.nextMenuId = menuMapping[index]
+              linked = true
+              break
             }
-            
-            // Tentar por texto (busca inteligente e flexível)
-            if (!linked && cleanTrigger) {
-              const option = options.find(o => {
-                const cleanOptionText = o.text.toLowerCase().trim()
-                return cleanOptionText.includes(cleanTrigger) || cleanTrigger.includes(cleanOptionText)
-              })
-              
+          }
+          
+          // 2. Se não ligou por texto, tentar por número nos menus anteriores
+          if (!linked && numMatch) {
+            const targetNum = parseInt(numMatch[1].replace(/[^0-9]/g, ""))
+            for (let i = 0; i < index; i++) {
+              const option = menus[menuMapping[i]].options.find(o => o.number === targetNum)
               if (option && !option.nextMenuId) {
                 option.nextMenuId = menuMapping[index]
                 linked = true
