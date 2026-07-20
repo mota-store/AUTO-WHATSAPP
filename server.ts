@@ -128,12 +128,21 @@ app.put('/api/auth/avatar', authMiddleware, async (req: Request, res: Response) 
   try {
     const userPayload = (req as any).user as AuthPayload
     const { avatar } = req.body
-    if (!avatar) return res.status(400).json({ message: 'Avatar é obrigatório' })
     
+    if (!avatar) {
+      return res.status(400).json({ message: 'Imagem não fornecida' })
+    }
+
+    // Verificar se é uma base64 válida e o tamanho aproximado
+    if (avatar.length > 10 * 1024 * 1024) { // Limite de 10MB para a string base64
+      return res.status(400).json({ message: 'Imagem muito grande. Limite de 5MB.' })
+    }
+
     await db.updateUserAvatar(userPayload.userId, avatar)
-    res.json({ message: 'Avatar atualizado' })
+    res.json({ message: 'Avatar atualizado com sucesso' })
   } catch (error: any) {
-    res.status(500).json({ message: error.message || 'Erro ao atualizar avatar' })
+    console.error('[AVATAR ERROR]', error)
+    res.status(500).json({ message: error.message || 'Erro ao processar imagem de perfil' })
   }
 })
 
@@ -292,7 +301,9 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     const cleanNumber = cleanPhoneNumber(phoneNumber)
     // Aguardar o socket estar conectado antes de solicitar pairing code
     const waitForConnection = setInterval(async () => {
-      if (sock.ws && sock.ws.isOpen) {
+      // Verificar sock.ws.readyState diretamente para ser mais rápido
+      const isOpen = sock.ws && (sock.ws.isOpen || (sock.ws as any).readyState === 1)
+      if (isOpen) {
         clearInterval(waitForConnection)
         try {
           console.log(`[MOTA-FLOW] [User ${userId}] Socket conectado, solicitando pairing code para ${cleanNumber}...`)
@@ -300,14 +311,9 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
             console.log(`[MOTA-FLOW] [User ${userId}] Socket já registrado, pulando pairing code`)
             return
           }
-          console.log(`[MOTA-FLOW] [User ${userId}] Chamando requestPairingCode...`)
-          const codePromise = sock.requestPairingCode(cleanNumber)
-          const code = await Promise.race([
-            codePromise,
-            new Promise<string>((_, reject) => 
-              setTimeout(() => reject(new Error('Timeout ao solicitar pairing code')), 30000)
-            )
-          ])
+          
+          // Solicitar pairing code imediatamente
+          const code = await sock.requestPairingCode(cleanNumber)
           console.log(`[MOTA-FLOW] [User ${userId}] ✅ Pairing code recebido: ${code}`)
           await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
         } catch (err: any) {
@@ -315,7 +321,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
           await db.updateWhatsappInstance(instanceId, { status: 'disconnected', pairingCode: null, qrCode: null })
         }
       }
-    }, 1000)
+    }, 500) // Verificar a cada 500ms para ser mais rápido
     
     // Timeout de segurança: se não conectar em 60 segundos, cancelar
     setTimeout(() => clearInterval(waitForConnection), 60000)
@@ -733,6 +739,24 @@ app.post('/api/whatsapp/reconnect', authMiddleware, async (req: Request, res: Re
   } catch (error) {
     console.error(`[MOTA-FLOW] Erro ao reconectar:`, error)
     res.status(500).json({ success: false, message: 'Erro ao reconectar' })
+  }
+})
+
+app.get('/api/whatsapp/logs', authMiddleware, async (req: Request, res: Response) => {
+  const user = (req as any).user as AuthPayload
+  const logPath = path.join(process.cwd(), 'logs', `whatsapp_${user.userId}.log`)
+  
+  if (!fs.existsSync(logPath)) {
+    return res.json({ logs: 'Nenhum log encontrado para esta sessão.' })
+  }
+
+  try {
+    const logs = fs.readFileSync(logPath, 'utf8')
+    // Retornar apenas as últimas 100 linhas para não sobrecarregar
+    const lines = logs.split('\n').slice(-100).join('\n')
+    res.json({ logs: lines })
+  } catch (err) {
+    res.status(500).json({ message: 'Erro ao ler logs' })
   }
 })
 

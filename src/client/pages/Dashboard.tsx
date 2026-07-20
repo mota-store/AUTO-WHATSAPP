@@ -50,7 +50,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadDashboard()
-    const interval = setInterval(loadDashboard, 5000)
+    // Polling inicial de 3s em vez de 5s para melhor UX
+    const interval = setInterval(loadDashboard, 3000)
     return () => clearInterval(interval)
   }, [])
 

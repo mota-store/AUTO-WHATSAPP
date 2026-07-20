@@ -25,21 +25,37 @@ export default function Pairing() {
     addLog(`Solicitando código para ${phoneNumber}...`)
     
     try {
-      const response = await fetch('/api/whatsapp/pairing-code', {
+      const response = await fetch('/api/whatsapp/connect', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify({ phoneNumber })
+        body: JSON.stringify({ phoneNumber, usePairingCode: true })
       })
 
-      const data = await response.json()
       if (response.ok) {
-        setCode(data.code)
-        addLog('Código gerado com sucesso!')
-        toast.success('Código gerado!')
+        addLog('Iniciando conexão...')
+        // Polling para pegar o código que será salvo no banco
+        const pollCode = setInterval(async () => {
+          try {
+            const res = await fetch('/api/dashboard', {
+              headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            })
+            const data = await res.json()
+            if (data.instance?.pairingCode) {
+              setCode(data.instance.pairingCode)
+              addLog('Código recebido!')
+              toast.success('Código gerado!')
+              clearInterval(pollCode)
+            }
+          } catch (e) {}
+        }, 1500)
+        
+        // Timeout de 30s para o polling do código
+        setTimeout(() => clearInterval(pollCode), 30000)
       } else {
+        const data = await response.json()
         toast.error(data.message || 'Erro ao gerar código')
         addLog(`Erro: ${data.message}`)
       }
@@ -75,7 +91,7 @@ export default function Pairing() {
           setTimeout(() => navigate('/dashboard'), 2000)
         }
       } catch (e) {}
-    }, 5000)
+    }, 2000)
 
     return () => clearInterval(interval)
   }, [code, navigate])

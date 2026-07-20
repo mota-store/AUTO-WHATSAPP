@@ -136,14 +136,27 @@ export default function Settings() {
     if (!file) return
 
     setIsLoading(true)
+    // Validar tipo de arquivo
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      setIsLoading(false)
+      return toast.error('Formato não suportado. Use JPG, PNG ou WEBP.')
+    }
+
+    // Validar tamanho (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setIsLoading(false)
+      return toast.error('Imagem muito grande. Máximo 5MB.')
+    }
+
     try {
       // Compress the image client-side
       const compressedBase64 = await compressImage(file)
       setProfileImage(compressedBase64)
       
       const token = localStorage.getItem('token')
-      const response = await fetch('/api/auth/update-avatar', {
-        method: 'POST',
+      const response = await fetch('/api/auth/avatar', {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
