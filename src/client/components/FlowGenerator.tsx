@@ -93,10 +93,13 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
         return
       }
 
-      // Normalizar quebras de linha e separadores para garantir leitura total
-      // Aceita --- com qualquer quantidade de hífens, espaços ou quebras de linha ao redor
-      const normalizedScript = script.replace(/\r\n/g, '\n').replace(/\n\s*-{3,}\s*\n/g, '\n---\n')
-      const sections = normalizedScript.split('\n---\n').map(s => s.trim()).filter(Boolean)
+      // Normalizar quebras de linha
+      const normalizedScript = script.replace(/\r\n/g, '\n')
+      
+      // Separar seções usando uma regex mais flexível para o separador ---
+      // Aceita qualquer quantidade de hífens (mínimo 3), com espaços opcionais, 
+      // garantindo que esteja em uma linha própria.
+      const sections = normalizedScript.split(/\n\s*-{3,}\s*\n/).map(s => s.trim()).filter(Boolean)
       
       if (sections.length === 0) {
         setError('Roteiro inválido. Use "---" para separar as seções.')
@@ -105,27 +108,35 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
 
       const menus: Record<string, MenuNode> = {}
       const menuMapping: Record<number, string> = {} // Map section index to menu ID
-
-      // First pass: Create menu nodes and handle reusability
       const titleToMenuId: Record<string, string> = {
         'menu principal': 'menu_0'
       }
 
+      // Helper para limpar títulos e opções
+      const cleanString = (str: string) => {
+        return str
+          .replace(/[0-9]️⃣|[0-9][\.\)\-\s]?/g, '') // Remove números e emojis de números
+          .replace(/^(se responder|se escolher|se o cliente responder)\s+/i, '') // Remove gatilhos
+          .trim()
+          .toLowerCase()
+      }
+
+      // First pass: Create menu nodes and handle reusability
       sections.forEach((section, index) => {
         const lines = section.split('\n').map(l => l.trim()).filter(Boolean)
-        
-        // Extract title
-        let rawTitle = lines[0].replace(/^[🤖\s]+/, '')
-        const isTriggerSection = lines[0].toLowerCase().startsWith('se responder') || lines[0].toLowerCase().startsWith('se escolher')
-        
-        // Limpar título para comparação (ex: "Se responder Comprar uma assinatura" -> "comprar uma assinatura")
-        const cleanTitle = (isTriggerSection ? 
-          rawTitle.replace(/^(se responder|se escolher)\s+/i, '') : 
-          rawTitle
-        ).replace(/[0-9]️⃣|[0-9][\.\)\-\s]?/g, '').trim().toLowerCase()
+        if (lines.length === 0) return
 
-        // Se este título já foi definido como um menu, reutilizamos o ID
-        if (titleToMenuId[cleanTitle]) {
+        const firstLine = lines[0]
+        const isTriggerSection = firstLine.toLowerCase().startsWith('se responder') || 
+                               firstLine.toLowerCase().startsWith('se escolher') ||
+                               firstLine.toLowerCase().startsWith('se o cliente responder')
+        
+        const rawTitle = firstLine.replace(/^[🤖\s]+/, '')
+        const cleanTitle = cleanString(rawTitle)
+
+        // Se este título já foi definido como um menu, reutilizamos o ID para o mapeamento
+        // MAS apenas se não for a primeira seção (que sempre deve ser o menu raiz)
+        if (index !== 0 && titleToMenuId[cleanTitle]) {
           menuMapping[index] = titleToMenuId[cleanTitle]
           return
         }
@@ -133,29 +144,38 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
         const menuId = index === 0 ? 'menu_0' : `menu_${Date.now()}_${index}`
         menuMapping[index] = menuId
         
-        // Registrar este título para reuso futuro (se não for o menu raiz, que já está registrado)
-        if (index !== 0 && cleanTitle) {
+        // Registrar este título para reuso futuro
+        if (cleanTitle) {
           titleToMenuId[cleanTitle] = menuId
         }
 
         const messageLines: string[] = []
         const options: MenuOption[] = []
-        const startLine = (index === 0) ? 0 : 1
+        const startLine = isTriggerSection ? 1 : (index === 0 ? 0 : 0)
         
-        for (let i = startLine; i < lines.length; i++) {
+        // Se for o primeiro menu e a primeira linha for um título (emoji de robô), pular
+        let actualStart = 0
+        if (index === 0 && firstLine.includes('🤖')) actualStart = 1
+        else if (isTriggerSection) actualStart = 1
+
+        for (let i = actualStart; i < lines.length; i++) {
           const line = lines[i]
-          // Suporte a 1️⃣, 1., 1), 1- ou apenas 1
+          // Suporte a 1️⃣, 1., 1), 1- ou apenas 1 no início da linha
           const optionMatch = line.match(/^([0-9]️⃣|[0-9][\.\)\-\s]?)\s*(.*)/)
           
           if (optionMatch) {
             const numStr = optionMatch[1].replace(/[^0-9]/g, '')
             const num = parseInt(numStr)
-            options.push({
-              id: `opt_${Date.now()}_${index}_${num}`,
-              number: num,
-              text: optionMatch[2].trim(),
-              response: ''
-            })
+            if (!isNaN(num)) {
+              options.push({
+                id: `opt_${Date.now()}_${index}_${num}_${Math.random().toString(36).substr(2, 4)}`,
+                number: num,
+                text: optionMatch[2].trim(),
+                response: ''
+              })
+            } else {
+              messageLines.push(line)
+            }
           } else {
             messageLines.push(line)
           }
@@ -163,112 +183,80 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
 
         menus[menuId] = {
           id: menuId,
-          title: title,
+          title: rawTitle,
           message: messageLines.join('\n'),
           options: options
         }
       })
 
-      // Second pass: Link menus based on "Se responder X" logic
+      // Second pass: Link menus
       sections.forEach((section, index) => {
+        const menuId = menuMapping[index]
+        if (!menuId || !menus[menuId]) return
+
         const lines = section.split('\n').map(l => l.trim()).filter(Boolean)
         const firstLine = lines[0].toLowerCase()
-        
-        // Se esta seção foi mapeada para um menu já existente (reuso), 
-        // não precisamos processá-la como um novo nó de destino (ela já é o destino)
-        const isTriggerSection = firstLine.includes('se responder') || firstLine.includes('se escolher')
-        const cleanTitle = lines[0].replace(/^(se responder|se escolher)\s+/i, '').replace(/[0-9]️⃣|[0-9][\.\)\-\s]?/g, '').trim().toLowerCase()
-        
-        // Se o menuMapping para este index aponta para algo que já existe no menus,
-        // significa que é uma seção de "ponte" (reuso) e não deve criar novas conexões a partir daqui
-        // A MENOS QUE seja a primeira vez que esse título aparece (quando ele é criado)
-        const menuId = menuMapping[index]
-        if (isTriggerSection && menus[menuId] && Object.keys(menus).indexOf(menuId) !== -1) {
-           // Se o menu já existe e não foi criado NESTA iteração do forEach (index), 
-           // então é apenas uma referência de reuso.
-           // Mas como o forEach de criação e o de link são separados, precisamos de outra lógica:
-           // Se a seção é um gatilho e o menuId já está preenchido no objeto 'menus',
-           // significa que esta seção é apenas para apontar um link, não para definir conteúdo.
-           return
-        }
+        const isTriggerSection = firstLine.includes('se responder') || 
+                               firstLine.includes('se escolher') ||
+                               firstLine.includes('se o cliente responder')
         
         if (isTriggerSection) {
-          // 1. Tentar vincular por número (ex: "Se responder 1")
-          const numMatch = /(?:se responder|se escolher)[^\d]*([0-9]️⃣|[0-9])/.exec(firstLine)
-          
-          // 2. Tentar vincular por texto (ex: "Se responder Comprar uma assinatura")
-          const cleanTrigger = lines[0]
-            .replace(/^(se responder|se escolher)\s+/i, '')
-            .replace(/[0-9]️⃣|[0-9][\.\)\-\s]?/g, '')
-            .trim()
-            .toLowerCase()
-          
+          const cleanTrigger = cleanString(lines[0])
+          const numMatch = /(?:se responder|se escolher|se o cliente responder)[^\d]*([0-9]️⃣|[0-9])/.exec(firstLine)
+          const targetNum = numMatch ? parseInt(numMatch[1].replace(/[^0-9]/g, "")) : null
+
           let linked = false
           
-          // 1. Prioridade: Procurar em TODOS os menus criados por texto idêntico ou parcial
+          // 1. Procurar opção correspondente em TODOS os menus
           for (const mId in menus) {
-            const option = menus[mId].options.find(o => {
-              const cleanOpt = o.text.toLowerCase().replace(/[0-9]️⃣|[0-9][\.\)\-\s]?/g, '').trim()
-              return cleanOpt === cleanTrigger || cleanOpt.includes(cleanTrigger) || cleanTrigger.includes(cleanOpt)
+            const menu = menus[mId]
+            // Evitar auto-link (um menu apontar para si mesmo via trigger, a menos que seja intencional)
+            if (mId === menuId) continue 
+
+            const option = menu.options.find(o => {
+              const optTextClean = cleanString(o.text)
+              // Match por texto exato ou se o gatilho está contido na opção
+              return optTextClean === cleanTrigger || (cleanTrigger.length > 3 && optTextClean.includes(cleanTrigger))
             })
-            if (option && !option.nextMenuId) {
-              option.nextMenuId = menuMapping[index]
+
+            if (option) {
+              option.nextMenuId = menuId
               linked = true
-              break
             }
-          }
-          
-          // 2. Se não ligou por texto, tentar por número nos menus anteriores
-          if (!linked && numMatch) {
-            const targetNum = parseInt(numMatch[1].replace(/[^0-9]/g, ""))
-            for (let i = 0; i < index; i++) {
-              const option = menus[menuMapping[i]].options.find(o => o.number === targetNum)
-              if (option && !option.nextMenuId) {
-                option.nextMenuId = menuMapping[index]
+
+            // Se tem número no gatilho, tentar match por número também no menu anterior imediato
+            if (!linked && targetNum !== null && mId === menuMapping[index - 1]) {
+              const numOption = menu.options.find(o => o.number === targetNum)
+              if (numOption) {
+                numOption.nextMenuId = menuId
                 linked = true
-                break
               }
             }
           }
-          
-          // 3. Fallback: Vincular ao menu imediatamente anterior se nada funcionou
-          if (!linked) {
-            const prevMenuId = menuMapping[index - 1]
-            if (prevMenuId) {
-              menus[prevMenuId].options.forEach(opt => {
-                if (!opt.nextMenuId) opt.nextMenuId = menuMapping[index]
-              })
-            }
-          }
-        } else if (firstLine.includes('qualquer uma') || firstLine.includes('após escolher')) {
-          const prevMenuId = menuMapping[index - 1]
-          if (prevMenuId) {
-            menus[prevMenuId].options.forEach(opt => {
-              if (!opt.nextMenuId) opt.nextMenuId = menuMapping[index]
-            })
-          }
         }
 
-        // Handle "Voltar ao menu principal" option linking to rootMenuId
-        if (menus[menuMapping[index]]) {
-          menus[menuMapping[index]].options.forEach(opt => {
-            if (opt.number === 0 && opt.text.toLowerCase().includes('voltar ao menu principal')) {
+        // Link especial para "Voltar ao menu principal"
+        menus[menuId].options.forEach(opt => {
+          const t = opt.text.toLowerCase()
+          if (t.includes('voltar ao menu principal') || t.includes('menu anterior') || t.includes('voltar ao início')) {
+            if (t.includes('menu principal') || t.includes('início')) {
               opt.nextMenuId = 'menu_0'
+            } else if (index > 0) {
+              opt.nextMenuId = menuMapping[index - 1]
             }
-          })
-        }
+          }
+        })
       })
 
-      // Final pass: Clean up and logging
-      console.log('[MOTA-FLOW] Fluxo gerado com sucesso:', { rootMenuId: 'menu_0', menus })
+      console.log('[MOTA-FLOW] Fluxo gerado com sucesso:', { rootMenuId: 'menu_0', menusCount: Object.keys(menus).length })
       onGenerate({
         rootMenuId: 'menu_0',
         menus
       })
       onClose()
-    } catch (err) {
-      console.error('[MOTA-FLOW] Erro no parser:', err)
-      setError('Erro ao processar o roteiro. Verifique a formatação.')
+    } catch (err: any) {
+      console.error('[MOTA-FLOW] Erro detalhado no parser:', err)
+      setError(`Erro ao processar o roteiro: ${err.message || 'Verifique a formatação.'}`)
     }
   }
 
@@ -323,6 +311,12 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
               placeholder="🤖 Nome do Fluxo&#10;&#10;Olá! Escolha uma opção:&#10;1️⃣ Opção A&#10;2️⃣ Opção B&#10;&#10;---&#10;&#10;Se responder 1️⃣&#10;Texto para opção 1..."
               className="w-full h-64 p-4 bg-background border border-border rounded-2xl text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all resize-none"
             />
+            {error && (
+              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                <p className="text-xs font-bold text-red-500">{error}</p>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -342,36 +336,31 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
                 <AlertCircle className="w-3 h-3" /> Exemplo Rápido
               </h4>
               <pre className="text-[9px] font-mono text-muted-foreground overflow-x-auto">
-{`Olá! Como ajudar?
+{`🤖 Menu Principal
+Olá! Escolha:
 1️⃣ Comprar
 2️⃣ Suporte
 
 ---
 
-Se responder 1️⃣
-Qual produto deseja?`}
+Se responder Comprar
+Temos Netflix e Disney...`}
               </pre>
             </div>
           </div>
-
-          {error && (
-            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-xl flex items-center gap-2 text-destructive text-xs font-bold">
-              <AlertCircle className="w-4 h-4" /> {error}
-            </div>
-          )}
         </div>
 
         {/* Footer */}
         <div className="p-6 border-t border-border/50 bg-muted/30 flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-3 border border-border rounded-xl font-black text-xs uppercase tracking-widest hover:bg-muted transition-all"
+            className="flex-1 py-4 bg-muted text-muted-foreground rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-muted/50 transition-all"
           >
             Cancelar
           </button>
           <button
             onClick={parseScript}
-            className="flex-[2] px-4 py-3 bg-primary text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-primary/20 hover:opacity-90 transition-all flex items-center justify-center gap-2"
+            className="flex-2 py-4 bg-primary text-primary-foreground rounded-2xl font-black text-xs uppercase tracking-widest hover:opacity-90 transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2"
           >
             <Wand2 className="w-4 h-4" /> Gerar Fluxo Mágico
           </button>

@@ -231,8 +231,10 @@ export default function Dashboard() {
         
         // Se houver um número salvo, abre o modal de pairing automaticamente
         if (instance?.phoneNumber) {
+          setPhoneNumber(instance.phoneNumber)
           setConnectMethod('pairing')
           setShowConnectModal(true)
+          setShowPairingLoading(true) // Pular o input e ir direto para o loading/exibição
         }
         
         startFastPolling()
