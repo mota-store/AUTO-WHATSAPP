@@ -44,12 +44,17 @@ console.log('🚀 [MOTA-FLOW] Iniciando servidor...')
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }))
 app.use(express.json({ limit: '10mb' }))
 
-// Fixar versão estável para evitar problemas com versões dinâmicas
 let baileysVersion: [number, number, number] = [2, 3000, 1015901307] 
 
 async function preloadBaileysVersion() {
-  console.log('[MOTA-FLOW] Usando versão fixa estável do Baileys:', baileysVersion.join('.'))
-  // Desativado fetch dinâmico para evitar versões quebradas
+  try {
+    console.log('[MOTA-FLOW] Buscando versão atualizada do Baileys...')
+    const { version, isLatest } = await fetchLatestBaileysVersion()
+    baileysVersion = version
+    console.log(`✅ [MOTA-FLOW] Versão Baileys: ${baileysVersion.join('.')} (Latest: ${isLatest})`)
+  } catch (err) {
+    console.log('⚠️ [MOTA-FLOW] Usando versão fallback:', baileysVersion.join('.'))
+  }
 }
 
 async function authMiddleware(req: Request, res: Response, next: NextFunction) {
@@ -260,8 +265,8 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
 
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
   
-  // CONFIGURAÇÃO UBUNTU CHROME (Confirmada como mais estável pelo usuário)
-  const browserConfig = ['Linux', 'Chrome', '120.0.0.0']  // Simular Chrome 120 no Linux
+  // CONFIGURAÇÃO UBUNTU CHROME OFICIAL (Mais estável e recomendada)
+  const browserConfig = Browsers.ubuntu('Chrome')
 
   console.log(`[MOTA-FLOW] [User ${userId}] Criando socket com versão: ${baileysVersion.join('.')}`)
   const sock = makeWASocket({
@@ -287,44 +292,37 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
 
   if (!isReconnect && phoneNumber) {
     const cleanNumber = cleanPhoneNumber(phoneNumber)
-    // Aguardar o socket estar conectado antes de solicitar pairing code
-    const waitForConnection = setInterval(async () => {
-      // Verificar sock.ws.readyState diretamente para ser mais rápido
-      // O Baileys às vezes demora para setar isOpen, então verificamos o estado do WebSocket
-      const isOpen = sock.ws && (sock.ws.isOpen || (sock.ws as any).readyState === 1)
-      
-      if (isOpen) {
-        clearInterval(waitForConnection)
+    // Aguardar o evento de atualização de conexão para solicitar o código
+    // Isso é mais seguro do que um setInterval cego
+    const pairingHandler = async (update: any) => {
+      const { connection } = update
+      if (connection === 'connecting' || connection === 'open') {
+        // Dar um tempo para o socket estabilizar
+        await new Promise(resolve => setTimeout(resolve, 5000))
+        
         try {
-          console.log(`[MOTA-FLOW] [User ${userId}] Socket aberto (readyState: ${sock.ws ? (sock.ws as any).readyState : 'null'}), solicitando pairing code para ${cleanNumber}...`)
+          if (sock.authState.creds.registered) return
           
-          // Dar um delay maior (3s) para garantir que o Baileys e o socket estejam 100% prontos
-          await new Promise(resolve => setTimeout(resolve, 3000))
-          
-          if (sock.authState.creds.registered) {
-            console.log(`[MOTA-FLOW] [User ${userId}] Socket já registrado, pulando pairing code`)
-            return
-          }
-          
-          console.log(`[MOTA-FLOW] [User ${userId}] Chamando requestPairingCode para ${cleanNumber}...`)
+          console.log(`[MOTA-FLOW] [User ${userId}] Solicitando pairing code para ${cleanNumber}...`)
           const code = await sock.requestPairingCode(cleanNumber)
           console.log(`[MOTA-FLOW] [User ${userId}] ✅ Pairing code recebido: ${code}`)
-          
-          // Limpar QR Code explicitamente ao salvar o pairing code para evitar confusão na UI
           await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
+          
+          // Remover este listener após sucesso
+          sock.ev.off('connection.update', pairingHandler)
         } catch (err: any) {
           console.error(`[MOTA-FLOW] [User ${userId}] ❌ Erro ao obter pairing code:`, err.message)
-          // Se falhar, tentamos de novo em 3 segundos se ainda estiver conectando
-          setTimeout(() => {
-            console.log(`[MOTA-FLOW] [User ${userId}] Tentando novamente solicitar pairing code...`)
-            connectToWhatsApp(userId, instanceId, phoneNumber, false)
-          }, 3000)
         }
       }
-    }, 1000)
+    }
+    
+    sock.ev.on('connection.update', pairingHandler)
+    
+    // Timeout de segurança para remover o listener
+    setTimeout(() => sock.ev.off('connection.update', pairingHandler), 60000)
     
     // Timeout de segurança: se não conectar em 60 segundos, cancelar
-    setTimeout(() => clearInterval(waitForConnection), 60000)
+    
   }
 
   sock.ev.on('connection.update', async (update) => {
