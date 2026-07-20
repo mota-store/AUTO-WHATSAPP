@@ -477,24 +477,37 @@ export default function Dashboard() {
               >
                 <BookOpen className="w-4 h-4" />
               </button>
-              {instance?.status === 'disconnected' && (
+              {(instance?.status === 'disconnected' || instance?.status === 'connected') && (
                 <button
                   onClick={handleReconnect}
                   disabled={isReconnecting}
-                  className="p-1.5 hover:bg-red-600/10 text-zinc-500 hover:text-red-600 rounded-lg transition-all disabled:opacity-50 disabled:pointer-events-none"
-                  title="Reconectar"
+                  className={`p-1.5 rounded-lg transition-all disabled:opacity-50 disabled:pointer-events-none ${
+                    instance?.status === 'connected' 
+                    ? 'hover:bg-primary/10 text-zinc-500 hover:text-primary' 
+                    : 'hover:bg-red-600/10 text-zinc-500 hover:text-red-600'
+                  }`}
+                  title="Reiniciar/Forçar Conexão"
                 >
-                  {isReconnecting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />}
+                  {isReconnecting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                 </button>
               )}
               {instance?.status === 'connected' && (
-                <button 
-                  onClick={handleDisconnect}
-                  className="p-1.5 hover:bg-red-500/10 text-zinc-500 hover:text-red-500 rounded-lg transition-all"
-                  title="Desconectar"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button 
+                    onClick={handleDisconnect}
+                    className="p-1.5 hover:bg-red-500/10 text-zinc-500 hover:text-red-500 rounded-lg transition-all"
+                    title="Desconectar (Sair)"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={handleReset}
+                    className="p-1.5 hover:bg-red-600/10 text-zinc-500 hover:text-red-600 rounded-lg transition-all"
+                    title="Reset Total (Limpar Sessão)"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               )}
             </div>
           </header>

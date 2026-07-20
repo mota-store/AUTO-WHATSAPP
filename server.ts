@@ -386,10 +386,18 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       }
 
       if (isLoggedOut) {
-        console.log(`[MOTA-FLOW] [User ${userId}] Logout detectado. Limpando sessão...`)
+        console.log(`[MOTA-FLOW] [User ${userId}] Logout detectado (Status: ${statusCode}). Limpando sessão...`)
         connectionLocks.delete(userId)
-        if (fs.existsSync(sessionPath)) fs.rmSync(sessionPath, { recursive: true, force: true })
-        await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null, pairingCode: null })
+        reconnectAttempts.delete(userId)
+        if (fs.existsSync(sessionPath)) {
+          try { fs.rmSync(sessionPath, { recursive: true, force: true }) } catch (e) {}
+        }
+        await db.updateWhatsappInstance(instanceId, { 
+          status: 'disconnected', 
+          qrCode: null, 
+          pairingCode: null,
+          phoneNumber: null 
+        })
         return
       }
 
