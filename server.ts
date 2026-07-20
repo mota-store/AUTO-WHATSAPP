@@ -265,9 +265,9 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
 
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
   
-  // CONFIGURAÇÃO UBUNTU CHROME (Para melhor compatibilidade com código de pareamento)
-  // Usar uma string de navegador altamente compatível
-  const browserConfig = ['Linux', 'Chrome', '120.0.0.0']  // Simular Chrome 120 no Linux
+  // CONFIGURAÇÃO MACOS CHROME (Para melhor compatibilidade com código de pareamento)
+  // Usar uma string de navegador altamente compatível simulando MacOS
+  const browserConfig = ['Mac OS', 'Chrome', '120.0.0.0']  // Simular Chrome 120 no MacOS
 
   console.log(`[MOTA-FLOW] [User ${userId}] Criando socket com versão: ${baileysVersion.join('.')}`)
   const sock = makeWASocket({
@@ -310,8 +310,8 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
         try {
           console.log(`[MOTA-FLOW] [User ${userId}] Socket aberto (readyState: ${sock.ws ? (sock.ws as any).readyState : 'null'}), solicitando pairing code para ${cleanNumber}...`)
           
-          // Dar um pequeno delay de 1s para o Baileys inicializar o estado interno após o socket abrir
-          await new Promise(resolve => setTimeout(resolve, 1500))
+          // Dar um delay maior (3s) para garantir que o Baileys e o socket estejam 100% prontos
+          await new Promise(resolve => setTimeout(resolve, 3000))
           
           if (sock.authState.creds.registered) {
             console.log(`[MOTA-FLOW] [User ${userId}] Socket já registrado, pulando pairing code`)
@@ -321,6 +321,8 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
           console.log(`[MOTA-FLOW] [User ${userId}] Chamando requestPairingCode para ${cleanNumber}...`)
           const code = await sock.requestPairingCode(cleanNumber)
           console.log(`[MOTA-FLOW] [User ${userId}] ✅ Pairing code recebido: ${code}`)
+          
+          // Limpar QR Code explicitamente ao salvar o pairing code para evitar confusão na UI
           await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
         } catch (err: any) {
           console.error(`[MOTA-FLOW] [User ${userId}] ❌ Erro ao obter pairing code:`, err.message)
@@ -341,7 +343,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     const { connection, lastDisconnect, qr } = update
     console.log(`[MOTA-FLOW] [User ${userId}] Update de conexão: ${connection || 'status'}`)
 
-    if (qr) {
+    if (qr && !phoneNumber) { // Só gera QR se não houver um número para pareamento
       try {
         const qrDataURL = await QRCode.toDataURL(qr)
         await db.updateWhatsappInstance(instanceId, { qrCode: qrDataURL, status: 'connecting', pairingCode: null })
