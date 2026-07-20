@@ -18,7 +18,21 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
           navigate('/login')
           return
         }
-        setIsAuthenticated(true)
+        
+        // Validar token com o backend
+        const response = await fetch('/api/auth/me', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+
+        if (response.ok) {
+          setIsAuthenticated(true)
+        } else {
+          localStorage.removeItem('token')
+          localStorage.removeItem('user')
+          navigate('/login')
+        }
       } catch (error) {
         navigate('/login')
       } finally {

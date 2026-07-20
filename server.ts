@@ -179,9 +179,10 @@ app.get('/api/flows', authMiddleware, async (req: Request, res: Response) => {
 
 app.get('/api/flows/:flowId', authMiddleware, async (req: Request, res: Response) => {
   try {
+    const user = (req as any).user as AuthPayload
     const flowId = parseInt(req.params.flowId)
-    const flow = await db.getMenuFlow(flowId)
-    if (!flow) return res.status(404).json({ message: 'Fluxo não encontrado' })
+    const flow = await db.getMenuFlow(flowId, user.userId)
+    if (!flow) return res.status(404).json({ message: 'Fluxo não encontrado ou sem permissão' })
     
     // Garantir que flowData seja um objeto
     if (typeof flow.flowData === 'string') {
@@ -196,9 +197,10 @@ app.get('/api/flows/:flowId', authMiddleware, async (req: Request, res: Response
 
 app.put('/api/flows/:flowId', authMiddleware, async (req: Request, res: Response) => {
   try {
+    const user = (req as any).user as AuthPayload
     const flowId = parseInt(req.params.flowId)
     const { name, description, flowData } = req.body
-    await db.updateMenuFlow(flowId, { name, description, flowData })
+    await db.updateMenuFlow(flowId, user.userId, { name, description, flowData })
     res.json({ message: 'Fluxo atualizado' })
   } catch (error: any) {
     res.status(500).json({ message: 'Erro ao atualizar fluxo' })
@@ -231,7 +233,7 @@ app.delete('/api/flows/:flowId', authMiddleware, async (req: Request, res: Respo
   try {
     const user = (req as any).user as AuthPayload
     const flowId = parseInt(req.params.flowId)
-    await db.deleteMenuFlow(flowId)
+    await db.deleteMenuFlow(flowId, user.userId)
     res.json({ message: 'Fluxo excluído' })
   } catch (error) {
     res.status(500).json({ message: 'Erro ao excluir fluxo' })
@@ -747,10 +749,38 @@ app.get('/api/whatsapp/logs', authMiddleware, async (req: Request, res: Response
 app.use(express.static(path.join(__dirname, 'client')))
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'client', 'index.html')))
 
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   db.syncSchema().then(() => {
     preloadBaileysVersion().then(() => {
       console.log(`🚀 [MOTA-FLOW] Porta ${PORT}`)
     })
   })
 })
+
+// GRACEFUL SHUTDOWN
+async function shutdown() {
+  console.log('\n🛑 [MOTA-FLOW] Encerrando servidor...')
+  
+  // Fechar todos os sockets do WhatsApp
+  for (const [userId, sock] of sessions.entries()) {
+    console.log(`[MOTA-FLOW] Fechando conexão do usuário ${userId}...`)
+    try {
+      sock.ev.removeAllListeners('connection.update')
+      sock.ws.close()
+    } catch (e) {}
+  }
+  
+  server.close(() => {
+    console.log('✅ [MOTA-FLOW] Servidor HTTP fechado.')
+    process.exit(0)
+  })
+  
+  // Timeout de segurança para forçar saída
+  setTimeout(() => {
+    console.error('⚠️ [MOTA-FLOW] Forçando saída após timeout.')
+    process.exit(1)
+  }, 10000)
+}
+
+process.on('SIGTERM', shutdown)
+process.on('SIGINT', shutdown)

@@ -2,7 +2,7 @@ import { drizzle } from 'drizzle-orm/mysql2'
 import mysql from 'mysql2/promise'
 import * as schema from '../../drizzle/schema'
 export { schema }
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 
 let pool: mysql.Pool | null = null
 let db: ReturnType<typeof drizzle> | null = null
@@ -191,13 +191,16 @@ export async function createMenuFlow(userId: number, name: string, description: 
   })
 }
 
-export async function getMenuFlow(flowId: number) {
+export async function getMenuFlow(flowId: number, userId?: number) {
   const database = await getDb()
-  const flows = await database
+  const query = database
     .select()
     .from(schema.menuFlows)
-    .where(eq(schema.menuFlows.id, flowId))
+    .where(userId 
+      ? and(eq(schema.menuFlows.id, flowId), eq(schema.menuFlows.userId, userId))
+      : eq(schema.menuFlows.id, flowId))
     .limit(1)
+  const flows = await query
   return flows[0]
 }
 
@@ -211,6 +214,7 @@ export async function getUserMenuFlows(userId: number) {
 
 export async function updateMenuFlow(
   flowId: number,
+  userId: number,
   data: Partial<typeof schema.menuFlows.$inferInsert>
 ) {
   const database = await getDb()
@@ -222,7 +226,7 @@ export async function updateMenuFlow(
   await database
     .update(schema.menuFlows)
     .set(updateData)
-    .where(eq(schema.menuFlows.id, flowId))
+    .where(and(eq(schema.menuFlows.id, flowId), eq(schema.menuFlows.userId, userId)))
 }
 
 export async function activateFlow(userId: number, flowId: number) {
@@ -240,11 +244,11 @@ export async function activateFlow(userId: number, flowId: number) {
     .where(eq(schema.menuFlows.id, flowId))
 }
 
-export async function deleteMenuFlow(flowId: number) {
+export async function deleteMenuFlow(flowId: number, userId: number) {
   const database = await getDb()
   await database
     .delete(schema.menuFlows)
-    .where(eq(schema.menuFlows.id, flowId))
+    .where(and(eq(schema.menuFlows.id, flowId), eq(schema.menuFlows.userId, userId)))
 }
 
 // Message Log queries
