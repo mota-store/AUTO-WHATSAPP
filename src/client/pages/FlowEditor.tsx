@@ -23,7 +23,11 @@ import {
   Video,
   Clock,
   Keyboard,
-  X
+  X,
+  Play,
+  Layers,
+  Activity,
+  Info
 } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
 import FlowGenerator from '../components/FlowGenerator'
@@ -36,6 +40,9 @@ interface MenuOption {
   response?: string
   attachmentName?: string
   attachmentData?: string
+  delay?: number
+  isTyping?: boolean
+  isRecording?: boolean
 }
 
 interface MenuNode {
@@ -43,6 +50,9 @@ interface MenuNode {
   title: string
   message: string
   options: MenuOption[]
+  delay?: number
+  isTyping?: boolean
+  isRecording?: boolean
 }
 
 interface MenuFlowData {
@@ -96,12 +106,10 @@ export default function FlowEditor() {
     loadBotAvatar()
   }, [flowId])
 
-  // Scroll to bottom when new messages arrive
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [previewMessages])
 
-  // Initialize preview chat when entering preview mode
   useEffect(() => {
     if (previewMode && flowData.rootMenuId) {
       const rootMenu = flowData.menus[flowData.rootMenuId]
@@ -115,12 +123,12 @@ export default function FlowEditor() {
   const loadBotAvatar = async () => {
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch('/api/bot-avatar', {
+      const res = await fetch('/api/auth/me', {
         headers: { Authorization: `Bearer ${token}` }
       })
       if (res.ok) {
         const data = await res.json()
-        if (data.botAvatar) setBotAvatar(data.botAvatar)
+        if (data.avatar) setBotAvatar(data.avatar)
       }
     } catch {}
   }
@@ -210,17 +218,14 @@ export default function FlowEditor() {
     toast.success('Nova resposta criada!')
   }
 
-  // Preview: handle option click
   const handlePreviewOptionClick = (option: MenuOption) => {
     if (!flowData) return
 
     const currentMenu = flowData.menus[previewCurrentMenuId]
     if (!currentMenu) return
 
-    // Add user message
     const newMessages: ChatMessage[] = [...previewMessages, { type: 'user', text: option.number.toString() }]
     
-    // Add bot response
     if (option.response || option.attachmentName) {
       newMessages.push({ 
         type: 'bot', 
@@ -230,19 +235,15 @@ export default function FlowEditor() {
       })
     }
 
-    // Navigate to next menu if exists
     if (option.nextMenuId && flowData.menus[option.nextMenuId]) {
       const nextMenu = flowData.menus[option.nextMenuId]
       newMessages.push({ type: 'bot', text: nextMenu.message })
       setPreviewCurrentMenuId(option.nextMenuId)
-    } else if (option.response) {
-      // No next menu, just show the response
     }
 
     setPreviewMessages(newMessages)
   }
 
-  // Preview: handle text input
   const handlePreviewSend = () => {
     if (!previewInput.trim() || !flowData) return
 
@@ -253,7 +254,6 @@ export default function FlowEditor() {
       return
     }
 
-    // Try match by number
     const numMatch = currentMenu.options.find(opt => opt.number.toString() === trimmed)
     if (numMatch) {
       handlePreviewOptionClick(numMatch)
@@ -261,7 +261,6 @@ export default function FlowEditor() {
       return
     }
 
-    // Try match by text (partial)
     const textMatch = currentMenu.options.find(opt => 
       opt.text.toLowerCase().includes(trimmed) || trimmed.includes(opt.text.toLowerCase())
     )
@@ -271,7 +270,6 @@ export default function FlowEditor() {
       return
     }
 
-    // No match: user message is sent but bot ignores (no response)
     setPreviewMessages(prev => [...prev, { type: 'user', text: previewInput.trim() }])
     setPreviewInput('')
   }
@@ -296,184 +294,225 @@ export default function FlowEditor() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <RefreshCw className="w-12 h-12 text-primary animate-spin" />
+      <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a]">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+          <Zap className="absolute inset-0 m-auto w-6 h-6 text-primary animate-pulse" />
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-[#0a0a0a] text-zinc-100 flex font-sans selection:bg-primary/30">
       <Sidebar />
       
-      <main className="flex-1 lg:ml-72 p-3 lg:p-6 transition-all duration-500">
-        <div className="max-w-6xl mx-auto space-y-4">
-          {/* Top Header */}
-          <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 bg-card p-4 rounded-2xl border border-border/50 shadow-sm">
-            <div className="flex items-center gap-4">
-              <button onClick={() => navigate('/flows')} className="p-2 hover:bg-muted rounded-lg transition-all">
-                <ChevronLeft className="w-6 h-6 text-muted-foreground" />
+      <main className="flex-1 lg:ml-72 p-4 lg:p-8 transition-all duration-500 overflow-y-auto h-screen">
+        <div className="max-w-7xl mx-auto space-y-6">
+          
+          {/* Header Profissional */}
+          <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-zinc-900/50 backdrop-blur-xl p-6 rounded-[2rem] border border-zinc-800/50 shadow-2xl">
+            <div className="flex items-center gap-5">
+              <button onClick={() => navigate('/flows')} className="p-3 bg-zinc-800 hover:bg-zinc-700 rounded-2xl transition-all group">
+                <ChevronLeft className="w-6 h-6 text-zinc-400 group-hover:text-white" />
               </button>
               <div>
-                <h1 className="text-lg font-black tracking-tight">{flowName || 'Novo Atendimento'}</h1>
-                <p className="text-[10px] font-bold text-primary uppercase tracking-widest">Editor</p>
+                <div className="flex items-center gap-2 mb-1">
+                  <h1 className="text-xl font-black tracking-tight">{flowName || 'Novo Atendimento'}</h1>
+                  <span className="px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-black rounded-full uppercase tracking-widest">Editor Pro</span>
+                </div>
+                <div className="flex items-center gap-4">
+                   <div className="flex items-center gap-1.5 text-zinc-500 text-[11px] font-bold uppercase tracking-wider">
+                     <Layers className="w-3.5 h-3.5" /> {Object.keys(flowData.menus).length} Etapas
+                   </div>
+                   <div className="flex items-center gap-1.5 text-zinc-500 text-[11px] font-bold uppercase tracking-wider">
+                     <Activity className="w-3.5 h-3.5" /> Ativo
+                   </div>
+                </div>
               </div>
             </div>
-            <div className="flex gap-2 w-full sm:w-auto">
+            
+            <div className="flex gap-3 w-full md:w-auto">
               <button 
                 onClick={() => setShowGenerator(true)}
-                className="flex-1 sm:flex-none px-3 py-2 bg-primary/10 text-primary rounded-lg font-black text-xs flex items-center justify-center gap-1 hover:bg-primary hover:text-white transition-all"
+                className="flex-1 md:flex-none px-5 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-2xl font-black text-xs flex items-center justify-center gap-2 transition-all"
               >
-                <Wand2 className="w-4 h-4" /> Gerador Mágico
+                <Wand2 className="w-4 h-4 text-primary" /> Gerador Mágico
               </button>
               <button 
                 onClick={() => setPreviewMode(!previewMode)}
-                className={`flex-1 sm:flex-none px-3 py-2 rounded-lg font-black text-xs flex items-center justify-center gap-1 transition-all ${previewMode ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'}`}
+                className={`flex-1 md:flex-none px-5 py-3 rounded-2xl font-black text-xs flex items-center justify-center gap-2 transition-all ${previewMode ? 'bg-primary text-black' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}
               >
-                <Eye className="w-4 h-4" /> {previewMode ? 'Voltar' : 'Testar'}
+                {previewMode ? <ChevronLeft className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {previewMode ? 'Sair do Teste' : 'Testar Fluxo'}
               </button>
               <button 
                 onClick={handleSave}
                 disabled={isSaving}
-                className="flex-1 sm:flex-none px-4 py-2 bg-whatsapp text-white rounded-lg font-black text-xs flex items-center justify-center gap-1 shadow-lg shadow-whatsapp/20 hover:opacity-90 transition-all"
+                className="flex-1 md:flex-none px-6 py-3 bg-primary text-black rounded-2xl font-black text-xs flex items-center justify-center gap-2 shadow-xl shadow-primary/20 hover:opacity-90 transition-all active:scale-95 disabled:opacity-50"
               >
                 {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                Salvar
+                Salvar Alterações
               </button>
             </div>
           </header>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-            {/* Left Side - Mapa Simples */}
-            <div className={`${previewMode ? 'hidden' : 'lg:col-span-4'} space-y-3`}>
-              <div className="glass-card rounded-xl p-3 border border-border/50">
-                <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1">
-                  <Settings className="w-3 h-3" /> Nome
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            {/* Sidebar de Etapas (Node-like) */}
+            <div className={`${previewMode ? 'hidden' : 'lg:col-span-3'} space-y-4`}>
+              <div className="bg-zinc-900/40 border border-zinc-800/50 rounded-[2rem] p-5 space-y-4">
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-zinc-500 flex items-center gap-2 px-1">
+                  <Layers className="w-3 h-3" /> Mapa de Navegação
                 </h3>
-                <input 
-                  type="text"
-                  value={flowName}
-                  onChange={(e) => setFlowName(e.target.value)}
-                  placeholder="Ex: Suporte de Vendas"
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs font-bold focus:ring-2 focus:ring-primary/10 transition-all"
-                />
-              </div>
-
-              <div className="glass-card rounded-xl p-3 border border-border/50">
-                <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1">
-                  <MousePointer2 className="w-3 h-3" /> Etapas
-                </h3>
-                <div className="space-y-1">
+                <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
                   {Object.values(flowData.menus).map(menu => (
                     <button 
                       key={menu.id}
                       onClick={() => setSelectedMenuId(menu.id)}
-                      className={`w-full p-2 rounded-lg text-left transition-all border-2 text-xs ${
+                      className={`w-full p-4 rounded-2xl text-left transition-all border group relative ${
                         selectedMenuId === menu.id 
-                        ? 'border-primary bg-primary/5 text-primary font-black' 
-                        : 'border-transparent bg-muted/30 text-muted-foreground hover:bg-muted/50'
+                        ? 'border-primary bg-primary/5 text-primary' 
+                        : 'border-zinc-800/50 bg-black/20 text-zinc-500 hover:border-zinc-700 hover:bg-zinc-800/30'
                       }`}
                     >
-                      <div className="flex justify-between items-center">
-                        <span className="truncate">{menu.id === flowData.rootMenuId ? 'Menu Principal' : `Resposta: ${menu.title.replace(/^Sub-menu:\s*/, '')}`}</span>
-                        {menu.id === flowData.rootMenuId && <span className="text-[7px] bg-primary text-white px-1.5 py-0.5 rounded-full">INÍCIO</span>}
+                      <div className="flex justify-between items-center gap-3">
+                        <div className="flex flex-col gap-0.5 overflow-hidden">
+                          <span className={`text-[11px] font-black truncate ${selectedMenuId === menu.id ? 'text-primary' : 'text-zinc-300'}`}>
+                            {menu.id === flowData.rootMenuId ? 'Menu Principal' : menu.title}
+                          </span>
+                          <span className="text-[9px] font-bold opacity-50 truncate">
+                            {menu.options.length} opções • {menu.message.substring(0, 20)}...
+                          </span>
+                        </div>
+                        {menu.id === flowData.rootMenuId && (
+                          <div className="shrink-0 w-2 h-2 bg-primary rounded-full animate-pulse shadow-[0_0_8px_rgba(var(--primary),0.5)]"></div>
+                        )}
                       </div>
                     </button>
                   ))}
                 </div>
+                <button 
+                  onClick={() => {
+                    const newId = `menu_${Date.now()}`
+                    const newMenus = { ...flowData.menus }
+                    newMenus[newId] = {
+                      id: newId,
+                      title: 'Nova Etapa',
+                      message: 'Escreva sua mensagem aqui...',
+                      options: []
+                    }
+                    setFlowData({ ...flowData, menus: newMenus })
+                    setSelectedMenuId(newId)
+                  }}
+                  className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-dashed border-zinc-700"
+                >
+                  <Plus className="w-3 h-3" /> Adicionar Etapa
+                </button>
+              </div>
+
+              <div className="bg-primary/5 border border-primary/10 rounded-[2rem] p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <Info className="w-4 h-4 text-primary" />
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-primary">Dica Pro</h4>
+                </div>
+                <p className="text-[11px] font-bold text-zinc-500 leading-relaxed">
+                  Use os controles de <span className="text-zinc-300">Humanização</span> para fazer o robô parecer uma pessoa real.
+                </p>
               </div>
             </div>
 
-            {/* Right Side - Editor Visual */}
-            <div className={`${previewMode ? 'lg:col-span-12' : 'lg:col-span-8'}`}>
+            {/* Área de Edição (Cards de Elite) */}
+            <div className={`${previewMode ? 'lg:col-span-12' : 'lg:col-span-9'}`}>
               {previewMode ? (
-                /* Preview Realista Estilo WhatsApp - FUNCIONAL */
-                <div className="flex justify-center py-8 bg-muted/20 rounded-[3rem] border-2 border-dashed border-border">
-                  <div className="w-full max-w-[360px] bg-[#E5DDD5] rounded-[3rem] border-[12px] border-black shadow-2xl overflow-hidden flex flex-col h-[600px]">
-                    {/* Header */}
-                    <div className="bg-[#075E54] p-4 flex items-center gap-3">
-                      {botAvatar ? (
-                        <img src={botAvatar} alt="Bot" className="w-10 h-10 rounded-full object-cover" />
-                      ) : (
-                        <img src="/bot-avatar.png" alt="Bot" className="w-10 h-10 rounded-full object-cover" />
-                      )}
+                /* Preview WhatsApp Profissional */
+                <div className="flex justify-center py-4 bg-zinc-900/20 rounded-[3rem] border-2 border-dashed border-zinc-800/50">
+                  <div className="w-full max-w-[380px] bg-[#0b141a] rounded-[3rem] border-[12px] border-zinc-900 shadow-2xl overflow-hidden flex flex-col h-[650px] relative">
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-zinc-900 rounded-b-2xl z-20"></div>
+                    
+                    {/* WA Header */}
+                    <div className="bg-[#202c33] p-5 pt-8 flex items-center gap-3 border-b border-white/5">
+                      <div className="relative">
+                        {botAvatar ? (
+                          <img src={botAvatar} alt="Bot" className="w-10 h-10 rounded-full object-cover border border-white/10" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-black font-black">M</div>
+                        )}
+                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-[#202c33] rounded-full"></div>
+                      </div>
                       <div>
-                        <p className="text-white font-black text-sm">MOTA-FLOW (Robô)</p>
-                        <p className="text-white/70 text-[10px]">Online</p>
+                        <p className="text-white font-black text-sm tracking-tight">MOTA-FLOW</p>
+                        <p className="text-emerald-500 text-[10px] font-bold">Online</p>
                       </div>
                     </div>
 
-                    {/* Chat Messages */}
-                    <div className="flex-1 p-4 space-y-3 overflow-y-auto">
+                    {/* WA Chat */}
+                    <div className="flex-1 p-4 space-y-4 overflow-y-auto bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-repeat">
                       {previewMessages.map((msg, idx) => (
-                        <div key={idx} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                          <div
-                            className={`px-3 py-2 rounded-lg shadow-sm max-w-[85%] ${
-                              msg.type === 'user' 
-                                ? 'bg-[#DCF8C6] text-black' 
-                                : 'bg-white text-black'
-                            }`}
-                            style={msg.type === 'user' ? { borderTopRightRadius: '4px' } : { borderTopLeftRadius: '4px' }}
-                          >
+                        <div key={idx} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                          <div className={`px-3 py-2 rounded-2xl shadow-lg max-w-[85%] relative ${
+                              msg.type === 'user' ? 'bg-[#005c4b] text-white rounded-tr-none' : 'bg-[#202c33] text-white rounded-tl-none'
+                            }`}>
                             {msg.attachmentData && (
-                              <div className="mb-2 rounded-lg overflow-hidden border border-gray-100">
+                              <div className="mb-2 rounded-xl overflow-hidden bg-black/20 p-1 border border-white/5">
                                 {msg.attachmentName?.toLowerCase().match(/\.(jpg|jpeg|png)$/) ? (
-                                  <img src={msg.attachmentData} alt="Anexo" className="w-full h-auto" />
+                                  <img src={msg.attachmentData} alt="Anexo" className="w-full h-auto rounded-lg" />
                                 ) : msg.attachmentName?.toLowerCase().match(/\.(mp4)$/) ? (
-                                  <div className="bg-black aspect-video flex items-center justify-center">
-                                    <Video className="w-8 h-8 text-white/50" />
+                                  <div className="bg-black aspect-video flex items-center justify-center rounded-lg">
+                                    <Play className="w-10 h-10 text-white/30 fill-white/30" />
                                   </div>
                                 ) : msg.attachmentName?.toLowerCase().match(/\.(mp3|ogg|wav)$/) ? (
-                                  <div className="bg-gray-50 p-2 flex items-center gap-2">
-                                    <Mic className="w-4 h-4 text-gray-400" />
-                                    <div className="flex-1 h-1 bg-gray-200 rounded-full">
-                                      <div className="w-1/3 h-full bg-primary rounded-full"></div>
+                                  <div className="bg-[#111b21] p-3 flex items-center gap-3 rounded-lg min-w-[200px]">
+                                    <div className="relative">
+                                      <Mic className="w-5 h-5 text-zinc-400" />
+                                      <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-500 rounded-full border-2 border-[#111b21]"></div>
                                     </div>
-                                    <span className="text-[10px] text-gray-400">0:15</span>
+                                    <div className="flex-1 space-y-1">
+                                      <div className="flex gap-0.5 items-end h-4">
+                                        {[...Array(15)].map((_, i) => (
+                                          <div key={i} className="w-0.5 bg-zinc-600 rounded-full" style={{ height: `${Math.random() * 100}%` }}></div>
+                                        ))}
+                                      </div>
+                                      <div className="flex justify-between text-[8px] font-bold text-zinc-500 uppercase">
+                                        <span>0:12</span>
+                                        <span>Hoje</span>
+                                      </div>
+                                    </div>
                                   </div>
                                 ) : (
-                                  <div className="p-2 bg-gray-50 flex items-center gap-2">
-                                    <FileText className="w-4 h-4 text-primary" />
-                                    <span className="text-[10px] font-bold truncate">{msg.attachmentName}</span>
+                                  <div className="p-3 bg-[#111b21] flex items-center gap-3 rounded-lg">
+                                    <FileText className="w-6 h-6 text-primary" />
+                                    <div className="flex flex-col">
+                                      <span className="text-[10px] font-black truncate max-w-[150px]">{msg.attachmentName}</span>
+                                      <span className="text-[8px] font-bold text-zinc-500 uppercase">Documento</span>
+                                    </div>
                                   </div>
                                 )}
                               </div>
                             )}
-                            <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+                            <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+                            <span className="text-[9px] text-white/40 block text-right mt-1 font-bold">05:30</span>
                           </div>
                         </div>
                       ))}
                       <div ref={chatEndRef} />
                     </div>
 
-                    {/* Options (clickable buttons) */}
-                    {flowData.menus[previewCurrentMenuId]?.options.length > 0 && (
-                      <div className="border-t border-gray-300/50 p-3 space-y-2 max-h-[150px] overflow-y-auto">
-                        {flowData.menus[previewCurrentMenuId].options.map(opt => (
-                          <button
-                            key={opt.id}
-                            onClick={() => handlePreviewOptionClick(opt)}
-                            className="w-full text-left px-3 py-2 bg-white/80 hover:bg-white rounded-lg transition text-sm font-bold text-[#128C7E]"
-                          >
-                            {opt.number}. {opt.text}
-                          </button>
-                        ))}
+                    {/* WA Input */}
+                    <div className="bg-[#202c33] p-4 flex gap-3 items-center border-t border-white/5">
+                      <div className="flex-1 bg-[#2a3942] rounded-full px-5 py-3 flex items-center">
+                        <input 
+                          type="text" 
+                          placeholder="Digite uma mensagem"
+                          value={previewInput}
+                          onChange={(e) => setPreviewInput(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handlePreviewSend()}
+                          className="flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
+                        />
                       </div>
-                    )}
-
-                    {/* Input funcional */}
-                    <div className="bg-[#F0F0F0] p-3 flex gap-2 items-center">
-                      <input 
-                        type="text" 
-                        placeholder="Digite uma mensagem"
-                        value={previewInput}
-                        onChange={(e) => setPreviewInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handlePreviewSend()}
-                        className="flex-1 bg-white rounded-full px-4 py-2 text-sm text-black outline-none border-none"
-                      />
                       <button 
                         onClick={handlePreviewSend}
-                        className="w-10 h-10 bg-[#128C7E] rounded-full flex items-center justify-center text-white shrink-0"
+                        className="w-12 h-12 bg-primary rounded-full flex items-center justify-center text-black shrink-0 shadow-lg shadow-primary/20 active:scale-90 transition-all"
                       >
                         <Send className="w-5 h-5" />
                       </button>
@@ -481,77 +520,93 @@ export default function FlowEditor() {
                   </div>
                 </div>
               ) : (
-                /* Editor Passo a Passo */
-                <div className="glass-card rounded-xl p-3 border border-border/50 space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div>
-                      <h2 className="text-lg font-black tracking-tight mb-1">{selectedMenu.title}</h2>
-                      <p className="text-muted-foreground font-medium text-xs">Escreva o que o robô vai responder nesta etapa.</p>
-                    </div>
+                /* Editor Visual por Cards */
+                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500 pb-20">
+                  
+                  {/* Card Principal da Etapa */}
+                  <div className="bg-zinc-900/40 border border-zinc-800/50 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden group">
+                    <div className="absolute top-0 left-0 w-1.5 h-full bg-primary"></div>
                     
-                    {/* Controles de Humanização do Menu */}
-                    <div className="flex items-center gap-2 bg-muted/30 p-2 rounded-2xl border border-border/50">
-                      <div className="flex items-center gap-1 px-2 border-r border-border/50">
-                        <Clock className="w-3 h-3 text-primary" />
-                        <input 
-                          type="number" 
-                          value={selectedMenu.delay || 0}
+                    <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-8">
+                      <div>
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="p-2 bg-primary/10 rounded-xl">
+                            <MessageSquare className="w-5 h-5 text-primary" />
+                          </div>
+                          <h2 className="text-2xl font-black tracking-tight">{selectedMenu.title}</h2>
+                        </div>
+                        <p className="text-zinc-500 font-bold text-xs uppercase tracking-widest ml-1">Configuração da Resposta Automática</p>
+                      </div>
+                      
+                      {/* Controles de Humanização (UI Elite) */}
+                      <div className="flex items-center gap-2 bg-black/40 p-2 rounded-[1.5rem] border border-zinc-800/50 shadow-inner">
+                        <div className="flex items-center gap-3 px-4 border-r border-zinc-800/50 group/delay">
+                          <div className="flex flex-col">
+                            <span className="text-[8px] font-black text-zinc-500 uppercase tracking-tighter">Pausa (Seg)</span>
+                            <div className="flex items-center gap-1.5">
+                              <Clock className="w-3.5 h-3.5 text-primary" />
+                              <input 
+                                type="number" 
+                                value={selectedMenu.delay || 0}
+                                onChange={(e) => {
+                                  const newMenus = { ...flowData.menus };
+                                  newMenus[selectedMenuId].delay = parseInt(e.target.value);
+                                  setFlowData({ ...flowData, menus: newMenus });
+                                }}
+                                className="w-8 bg-transparent text-sm font-black outline-none text-white"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex gap-1 px-2">
+                          <button 
+                            onClick={() => {
+                              const newMenus = { ...flowData.menus };
+                              newMenus[selectedMenuId].isTyping = !newMenus[selectedMenuId].isTyping;
+                              if (newMenus[selectedMenuId].isTyping) newMenus[selectedMenuId].isRecording = false;
+                              setFlowData({ ...flowData, menus: newMenus });
+                            }}
+                            className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all ${selectedMenu.isTyping ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'text-zinc-500 hover:bg-zinc-800/50'}`}
+                          >
+                            <Keyboard className="w-4 h-4" />
+                            <span className="text-[7px] font-black uppercase tracking-tighter">Digitando</span>
+                          </button>
+                          <button 
+                            onClick={() => {
+                              const newMenus = { ...flowData.menus };
+                              newMenus[selectedMenuId].isRecording = !newMenus[selectedMenuId].isRecording;
+                              if (newMenus[selectedMenuId].isRecording) newMenus[selectedMenuId].isTyping = false;
+                              setFlowData({ ...flowData, menus: newMenus });
+                            }}
+                            className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all ${selectedMenu.isRecording ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'text-zinc-500 hover:bg-zinc-800/50'}`}
+                          >
+                            <Mic className="w-4 h-4" />
+                            <span className="text-[7px] font-black uppercase tracking-tighter">Gravando</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-6">
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2 ml-1">
+                          <Send className="w-3 h-3" /> Conteúdo da Mensagem
+                        </label>
+                        <textarea 
+                          value={selectedMenu.message}
                           onChange={(e) => {
                             const newMenus = { ...flowData.menus };
-                            newMenus[selectedMenuId].delay = parseInt(e.target.value);
+                            newMenus[selectedMenuId].message = e.target.value;
                             setFlowData({ ...flowData, menus: newMenus });
                           }}
-                          className="w-8 bg-transparent text-[10px] font-black outline-none"
+                          className="w-full px-6 py-5 bg-black/40 border border-zinc-800/50 rounded-3xl font-medium h-32 focus:border-primary outline-none transition-all text-base shadow-inner placeholder:text-zinc-700"
+                          placeholder="Ex: Olá! Escolha uma das opções abaixo para continuarmos..."
                         />
-                        <span className="text-[8px] font-black text-muted-foreground uppercase">s</span>
                       </div>
-                      <button 
-                        onClick={() => {
-                          const newMenus = { ...flowData.menus };
-                          newMenus[selectedMenuId].isTyping = !newMenus[selectedMenuId].isTyping;
-                          if (newMenus[selectedMenuId].isTyping) newMenus[selectedMenuId].isRecording = false;
-                          setFlowData({ ...flowData, menus: newMenus });
-                        }}
-                        className={`p-1.5 rounded-lg transition-all ${selectedMenu.isTyping ? 'bg-primary text-white' : 'text-muted-foreground hover:bg-muted'}`}
-                        title="Simular Digitando"
-                      >
-                        <Keyboard className="w-3.5 h-3.5" />
-                      </button>
-                      <button 
-                        onClick={() => {
-                          const newMenus = { ...flowData.menus };
-                          newMenus[selectedMenuId].isRecording = !newMenus[selectedMenuId].isRecording;
-                          if (newMenus[selectedMenuId].isRecording) newMenus[selectedMenuId].isTyping = false;
-                          setFlowData({ ...flowData, menus: newMenus });
-                        }}
-                        className={`p-1.5 rounded-lg transition-all ${selectedMenu.isRecording ? 'bg-primary text-white' : 'text-muted-foreground hover:bg-muted'}`}
-                        title="Simular Gravando Áudio"
-                      >
-                        <Mic className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
 
-                  <div className="space-y-3">
-                    <div className="space-y-2">
-                      <label className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1">
-                        <MessageSquare className="w-3 h-3" /> Mensagem
-                      </label>
-                      <textarea 
-                        value={selectedMenu.message}
-                        onChange={(e) => {
-                          const newMenus = { ...flowData.menus };
-                          newMenus[selectedMenuId].message = e.target.value;
-                          setFlowData({ ...flowData, menus: newMenus });
-                        }}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg font-medium h-24 focus:border-primary outline-none transition-all text-sm"
-                        placeholder="Ex: Olá! Como posso te ajudar?"
-                      />
-                    </div>
-
-                    <div className="space-y-2 pt-2">
-                      <div className="flex justify-between items-center gap-2">
-                        <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground">Opções:</h3>
+                      <div className="flex items-center justify-between gap-4 pt-4 border-t border-zinc-800/50">
+                        <h3 className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Opções de Interação</h3>
                         <button 
                           onClick={() => {
                             const newId = `opt_${Date.now()}`;
@@ -564,21 +619,23 @@ export default function FlowEditor() {
                             });
                             setFlowData({ ...flowData, menus: newMenus });
                           }}
-                          className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-lg font-black text-[10px] hover:bg-primary hover:text-white transition-all"
+                          className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-primary hover:text-black transition-all border border-primary/20 shadow-lg shadow-primary/5"
                         >
-                          <Plus className="w-3 h-3" /> Opção
+                          <Plus className="w-4 h-4" /> Nova Opção
                         </button>
                       </div>
 
-                      <div className="grid grid-cols-1 gap-2">
+                      {/* Lista de Opções (Cards Filhos) */}
+                      <div className="grid grid-cols-1 gap-4">
                         {selectedMenu.options.map((option, index) => (
-                          <div key={option.id} className="group bg-muted/20 hover:bg-muted/40 p-2 rounded-lg border border-border/50 transition-all">
-                            <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
-                              <div className="w-7 h-7 bg-white border-2 border-primary rounded-lg flex items-center justify-center font-black text-primary text-xs shadow-sm">
+                          <div key={option.id} className="group bg-zinc-900/60 hover:bg-zinc-800/40 p-5 rounded-3xl border border-zinc-800/50 transition-all hover:shadow-xl hover:shadow-black/20">
+                            <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center">
+                              <div className="w-10 h-10 bg-black border-2 border-primary rounded-2xl flex items-center justify-center font-black text-primary text-sm shadow-xl shadow-primary/10">
                                 {option.number}
                               </div>
-                              <div className="flex-1 w-full">
-                                <label className="text-[8px] font-black uppercase text-muted-foreground mb-0.5 block">Texto</label>
+                              
+                              <div className="flex-1 w-full space-y-1">
+                                <label className="text-[9px] font-black uppercase text-zinc-600 tracking-widest ml-1">Texto da Opção</label>
                                 <input 
                                   type="text"
                                   value={option.text}
@@ -587,14 +644,16 @@ export default function FlowEditor() {
                                     newMenus[selectedMenuId].options[index].text = e.target.value;
                                     setFlowData({ ...flowData, menus: newMenus });
                                   }}
-                                  className="w-full bg-transparent border-b border-border focus:border-primary outline-none py-0.5 font-bold text-xs transition-all"
+                                  className="w-full bg-transparent border-b border-zinc-800 focus:border-primary outline-none py-1 font-black text-sm transition-all text-zinc-200"
                                 />
                               </div>
-                              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto items-end sm:items-center">
-                                {/* Humanização da Opção */}
-                                <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-xl border border-border/50">
-                                  <div className="flex items-center gap-0.5 px-1.5 border-r border-border/50">
-                                    <Clock className="w-2.5 h-2.5 text-primary" />
+
+                              <div className="flex flex-wrap lg:flex-nowrap gap-3 w-full lg:w-auto items-center">
+                                
+                                {/* Controles de Humanização da Opção */}
+                                <div className="flex items-center gap-1 bg-black/40 p-1.5 rounded-2xl border border-zinc-800/50">
+                                  <div className="flex items-center gap-1 px-2 border-r border-zinc-800/50">
+                                    <Clock className="w-3 h-3 text-primary" />
                                     <input 
                                       type="number" 
                                       value={option.delay || 0}
@@ -603,7 +662,7 @@ export default function FlowEditor() {
                                         newMenus[selectedMenuId].options[index].delay = parseInt(e.target.value);
                                         setFlowData({ ...flowData, menus: newMenus });
                                       }}
-                                      className="w-6 bg-transparent text-[9px] font-black outline-none"
+                                      className="w-6 bg-transparent text-[10px] font-black outline-none text-white"
                                     />
                                   </div>
                                   <button 
@@ -613,9 +672,10 @@ export default function FlowEditor() {
                                       if (newMenus[selectedMenuId].options[index].isTyping) newMenus[selectedMenuId].options[index].isRecording = false;
                                       setFlowData({ ...flowData, menus: newMenus });
                                     }}
-                                    className={`p-1 rounded-md transition-all ${option.isTyping ? 'bg-primary text-white' : 'text-muted-foreground'}`}
+                                    className={`p-1.5 rounded-lg transition-all ${option.isTyping ? 'bg-primary text-black' : 'text-zinc-600'}`}
+                                    title="Digitando"
                                   >
-                                    <Keyboard className="w-2.5 h-2.5" />
+                                    <Keyboard className="w-3.5 h-3.5" />
                                   </button>
                                   <button 
                                     onClick={() => {
@@ -624,21 +684,22 @@ export default function FlowEditor() {
                                       if (newMenus[selectedMenuId].options[index].isRecording) newMenus[selectedMenuId].options[index].isTyping = false;
                                       setFlowData({ ...flowData, menus: newMenus });
                                     }}
-                                    className={`p-1 rounded-md transition-all ${option.isRecording ? 'bg-primary text-white' : 'text-muted-foreground'}`}
+                                    className={`p-1.5 rounded-lg transition-all ${option.isRecording ? 'bg-primary text-black' : 'text-zinc-600'}`}
+                                    title="Gravando Áudio"
                                   >
-                                    <Mic className="w-2.5 h-2.5" />
+                                    <Mic className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
 
-                                {/* Upload de Arquivo .txt */}
-                                <div className="relative group/file">
+                                {/* Sistema de Mídia da Opção */}
+                                <div className="relative">
                                   {option.attachmentName ? (
-                                    <div className="flex items-center gap-1 bg-emerald-500/10 text-emerald-500 px-2 py-1.5 rounded-lg border border-emerald-500/20 max-w-[120px]">
-                                      {option.attachmentName.toLowerCase().match(/\.(jpg|jpeg|png)$/) ? <ImageIcon className="w-3 h-3 shrink-0" /> : 
-                                       option.attachmentName.toLowerCase().match(/\.(mp3|ogg|wav)$/) ? <Mic className="w-3 h-3 shrink-0" /> :
-                                       option.attachmentName.toLowerCase().match(/\.(mp4)$/) ? <Video className="w-3 h-3 shrink-0" /> :
-                                       <FileText className="w-3 h-3 shrink-0" />}
-                                      <span className="text-[9px] font-black truncate">{option.attachmentName}</span>
+                                    <div className="flex items-center gap-2 bg-emerald-500/10 text-emerald-500 px-3 py-2 rounded-2xl border border-emerald-500/20 max-w-[150px] group/file relative">
+                                      {option.attachmentName.toLowerCase().match(/\.(jpg|jpeg|png)$/) ? <ImageIcon className="w-4 h-4 shrink-0" /> : 
+                                       option.attachmentName.toLowerCase().match(/\.(mp3|ogg|wav)$/) ? <Mic className="w-4 h-4 shrink-0" /> :
+                                       option.attachmentName.toLowerCase().match(/\.(mp4)$/) ? <Video className="w-4 h-4 shrink-0" /> :
+                                       <FileText className="w-4 h-4 shrink-0" />}
+                                      <span className="text-[10px] font-black truncate">{option.attachmentName}</span>
                                       <button 
                                         onClick={() => {
                                           const newMenus = { ...flowData.menus };
@@ -648,12 +709,30 @@ export default function FlowEditor() {
                                         }}
                                         className="hover:text-red-500 transition-colors"
                                       >
-                                        <X className="w-3 h-3" />
+                                        <X className="w-4 h-4" />
                                       </button>
+                                      
+                                      {/* Preview Real ao passar o mouse */}
+                                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-zinc-900 border border-zinc-800 rounded-2xl p-2 shadow-2xl opacity-0 pointer-events-none group-hover/file:opacity-100 transition-all z-50">
+                                        {option.attachmentData && (
+                                          <div className="rounded-xl overflow-hidden">
+                                            {option.attachmentName.toLowerCase().match(/\.(jpg|jpeg|png)$/) ? (
+                                              <img src={option.attachmentData} alt="Preview" className="w-full h-auto" />
+                                            ) : option.attachmentName.toLowerCase().match(/\.(mp3|ogg|wav)$/) ? (
+                                              <div className="p-3 bg-black/40 flex items-center gap-3">
+                                                <Play className="w-4 h-4 text-primary" />
+                                                <div className="flex-1 h-1 bg-zinc-800 rounded-full"></div>
+                                              </div>
+                                            ) : (
+                                              <div className="p-3 text-[10px] font-bold text-center text-zinc-500">Preview não disponível</div>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
                                   ) : (
-                                    <label className="flex items-center gap-1 px-2 py-1.5 bg-zinc-800 text-zinc-400 rounded-lg font-black text-[9px] hover:bg-zinc-700 cursor-pointer transition-all">
-                                      <ImageIcon className="w-3 h-3" /> ANEXAR
+                                    <label className="flex items-center gap-2 px-4 py-2 bg-zinc-800 text-zinc-400 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-zinc-700 cursor-pointer transition-all border border-zinc-700/50">
+                                      <ImageIcon className="w-4 h-4" /> Anexar
                                       <input 
                                         type="file" 
                                         accept=".txt,.jpg,.jpeg,.png,.mp3,.mp4,.pdf"
@@ -661,8 +740,8 @@ export default function FlowEditor() {
                                         onChange={(e) => {
                                           const file = e.target.files?.[0];
                                           if (file) {
-                                            if (file.size > 2 * 1024 * 1024) {
-                                              toast.error('Arquivo muito grande (máx 2MB)');
+                                            if (file.size > 5 * 1024 * 1024) {
+                                              toast.error('Arquivo muito grande (máx 5MB)');
                                               return;
                                             }
                                             const reader = new FileReader();
@@ -672,7 +751,7 @@ export default function FlowEditor() {
                                               newMenus[selectedMenuId].options[index].attachmentName = file.name;
                                               newMenus[selectedMenuId].options[index].attachmentData = data;
                                               setFlowData({ ...flowData, menus: newMenus });
-                                              toast.success('Arquivo anexado!');
+                                              toast.success(`${file.name} anexado!`);
                                             };
                                             reader.readAsDataURL(file);
                                           }
@@ -692,7 +771,7 @@ export default function FlowEditor() {
                                           createNextStep(option.id);
                                         }
                                       }}
-                                      className={`flex items-center gap-2 px-4 py-3 rounded-2xl font-black text-xs transition-all ${option.nextMenuId ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-primary/10 text-primary hover:bg-primary hover:text-white'}`}
+                                      className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-xs transition-all ${option.nextMenuId ? 'bg-primary text-black shadow-xl shadow-primary/20' : 'bg-primary/10 text-primary hover:bg-primary hover:text-black'}`}
                                     >
                                       <ChevronRight className="w-4 h-4" /> {option.nextMenuId ? 'Editar Resposta' : 'Criar Resposta'}
                                     </button>
@@ -703,7 +782,7 @@ export default function FlowEditor() {
                                       newMenus[selectedMenuId].options = newMenus[selectedMenuId].options.filter(o => o.id !== option.id);
                                       setFlowData({ ...flowData, menus: newMenus });
                                     }}
-                                    className="p-3 bg-destructive/10 text-destructive rounded-2xl hover:bg-destructive hover:text-white transition-all"
+                                    className="p-3 bg-red-500/10 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all border border-red-500/20"
                                   >
                                     <Trash2 className="w-5 h-5" />
                                   </button>
@@ -716,13 +795,13 @@ export default function FlowEditor() {
                     </div>
                   </div>
 
-                  {/* Reset Preview Button */}
-                  <div className="flex justify-center pt-4">
+                  {/* Botão Reiniciar Preview */}
+                  <div className="flex justify-center pt-6">
                     <button
                       onClick={handlePreviewReset}
-                      className="px-6 py-3 bg-muted text-muted-foreground rounded-2xl font-black text-sm flex items-center gap-2 hover:bg-primary hover:text-white transition-all"
+                      className="px-8 py-4 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-[2rem] font-black text-xs uppercase tracking-widest flex items-center gap-3 transition-all border border-zinc-800/50 shadow-xl active:scale-95"
                     >
-                      <RefreshCw className="w-4 h-4" /> Reiniciar Preview
+                      <RefreshCw className="w-4 h-4" /> Reiniciar Simulação de Teste
                     </button>
                   </div>
                 </div>
