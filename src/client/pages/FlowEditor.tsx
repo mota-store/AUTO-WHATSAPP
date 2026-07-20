@@ -373,6 +373,34 @@ export default function FlowEditor() {
             
             {/* Sidebar de Etapas (Node-like) */}
             <div className={`${previewMode ? 'hidden' : 'lg:col-span-3'} space-y-4`}>
+              {/* Configurações do Fluxo */}
+              <div className="bg-zinc-900/40 border border-zinc-800/50 rounded-[2rem] p-6 space-y-4">
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-zinc-500 flex items-center gap-2 px-1">
+                  <Settings className="w-3 h-3" /> Configurações
+                </h3>
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-zinc-600 uppercase tracking-widest ml-1">Nome do Fluxo</label>
+                    <input 
+                      type="text"
+                      value={flowName}
+                      onChange={(e) => setFlowName(e.target.value)}
+                      placeholder="Ex: Atendimento Loja"
+                      className="w-full bg-black/40 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs font-bold focus:border-primary outline-none transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-zinc-600 uppercase tracking-widest ml-1">Descrição</label>
+                    <textarea 
+                      value={flowDescription}
+                      onChange={(e) => setFlowDescription(e.target.value)}
+                      placeholder="Breve descrição..."
+                      className="w-full bg-black/40 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs font-bold focus:border-primary outline-none transition-all h-20 resize-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="bg-zinc-900/40 border border-zinc-800/50 rounded-[2rem] p-5 space-y-4">
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-zinc-500 flex items-center gap-2 px-1">
                   <Layers className="w-3 h-3" /> Mapa de Navegação
