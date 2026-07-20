@@ -18,6 +18,9 @@ import {
   Send,
   Wand2,
   FileText,
+  Image as ImageIcon,
+  Mic,
+  Video,
   X
 } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
@@ -48,6 +51,8 @@ interface MenuFlowData {
 interface ChatMessage {
   type: 'user' | 'bot'
   text: string
+  attachmentName?: string
+  attachmentData?: string
 }
 
 export default function FlowEditor() {
@@ -214,8 +219,13 @@ export default function FlowEditor() {
     const newMessages: ChatMessage[] = [...previewMessages, { type: 'user', text: option.number.toString() }]
     
     // Add bot response
-    if (option.response) {
-      newMessages.push({ type: 'bot', text: option.response })
+    if (option.response || option.attachmentName) {
+      newMessages.push({ 
+        type: 'bot', 
+        text: option.response || '',
+        attachmentName: option.attachmentName,
+        attachmentData: option.attachmentData
+      })
     }
 
     // Navigate to next menu if exists
@@ -403,6 +413,30 @@ export default function FlowEditor() {
                             }`}
                             style={msg.type === 'user' ? { borderTopRightRadius: '4px' } : { borderTopLeftRadius: '4px' }}
                           >
+                            {msg.attachmentData && (
+                              <div className="mb-2 rounded-lg overflow-hidden border border-gray-100">
+                                {msg.attachmentName?.toLowerCase().match(/\.(jpg|jpeg|png)$/) ? (
+                                  <img src={msg.attachmentData} alt="Anexo" className="w-full h-auto" />
+                                ) : msg.attachmentName?.toLowerCase().match(/\.(mp4)$/) ? (
+                                  <div className="bg-black aspect-video flex items-center justify-center">
+                                    <Video className="w-8 h-8 text-white/50" />
+                                  </div>
+                                ) : msg.attachmentName?.toLowerCase().match(/\.(mp3|ogg|wav)$/) ? (
+                                  <div className="bg-gray-50 p-2 flex items-center gap-2">
+                                    <Mic className="w-4 h-4 text-gray-400" />
+                                    <div className="flex-1 h-1 bg-gray-200 rounded-full">
+                                      <div className="w-1/3 h-full bg-primary rounded-full"></div>
+                                    </div>
+                                    <span className="text-[10px] text-gray-400">0:15</span>
+                                  </div>
+                                ) : (
+                                  <div className="p-2 bg-gray-50 flex items-center gap-2">
+                                    <FileText className="w-4 h-4 text-primary" />
+                                    <span className="text-[10px] font-bold truncate">{msg.attachmentName}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                             <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
                           </div>
                         </div>
@@ -515,7 +549,10 @@ export default function FlowEditor() {
                                 <div className="relative group/file">
                                   {option.attachmentName ? (
                                     <div className="flex items-center gap-1 bg-emerald-500/10 text-emerald-500 px-2 py-1.5 rounded-lg border border-emerald-500/20 max-w-[120px]">
-                                      <FileText className="w-3 h-3 shrink-0" />
+                                      {option.attachmentName.toLowerCase().match(/\.(jpg|jpeg|png)$/) ? <ImageIcon className="w-3 h-3 shrink-0" /> : 
+                                       option.attachmentName.toLowerCase().match(/\.(mp3|ogg|wav)$/) ? <Mic className="w-3 h-3 shrink-0" /> :
+                                       option.attachmentName.toLowerCase().match(/\.(mp4)$/) ? <Video className="w-3 h-3 shrink-0" /> :
+                                       <FileText className="w-3 h-3 shrink-0" />}
                                       <span className="text-[9px] font-black truncate">{option.attachmentName}</span>
                                       <button 
                                         onClick={() => {
@@ -531,7 +568,7 @@ export default function FlowEditor() {
                                     </div>
                                   ) : (
                                     <label className="flex items-center gap-1 px-2 py-1.5 bg-zinc-800 text-zinc-400 rounded-lg font-black text-[9px] hover:bg-zinc-700 cursor-pointer transition-all">
-                                      <FileText className="w-3 h-3" /> MÍDIA
+                                      <ImageIcon className="w-3 h-3" /> ANEXAR
                                       <input 
                                         type="file" 
                                         accept=".txt,.jpg,.jpeg,.png,.mp3,.mp4,.pdf"
