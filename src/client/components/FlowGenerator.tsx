@@ -105,29 +105,37 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
       const menus: Record<string, MenuNode> = {}
       const menuMapping: Record<number, string> = {} // Map section index to menu ID
 
-      // First pass: Create menu nodes
+      // First pass: Create menu nodes and handle reusability
+      const titleToMenuId: Record<string, string> = {
+        'menu principal': 'menu_0'
+      }
+
       sections.forEach((section, index) => {
         const lines = section.split('\n').map(l => l.trim()).filter(Boolean)
         
         // Extract title
-        let title = lines[0].replace(/^[🤖\s]+/, '')
+        let rawTitle = lines[0].replace(/^[🤖\s]+/, '')
         const isTriggerSection = lines[0].toLowerCase().startsWith('se responder') || lines[0].toLowerCase().startsWith('se escolher')
         
-        if (isTriggerSection) {
-          title = lines[0]
-        }
+        // Limpar título para comparação (ex: "Se responder Comprar uma assinatura" -> "comprar uma assinatura")
+        const cleanTitle = (isTriggerSection ? 
+          rawTitle.replace(/^(se responder|se escolher)\s+/i, '') : 
+          rawTitle
+        ).replace(/[0-9]️⃣|[0-9][\.\)\-\s]?/g, '').trim().toLowerCase()
 
-        // Seção especial: Menu Principal sempre aponta para o menu_0
-        if (title.toLowerCase().includes('menu principal') && isTriggerSection) {
-          // Não criamos um novo menu para gatilhos do Menu Principal, 
-          // apenas marcamos que esta seção deve ser ignorada na criação de novos nós
-          // e mapeada para o menu_0 no segundo passo
-          menuMapping[index] = 'menu_0'
+        // Se este título já foi definido como um menu, reutilizamos o ID
+        if (titleToMenuId[cleanTitle]) {
+          menuMapping[index] = titleToMenuId[cleanTitle]
           return
         }
 
         const menuId = index === 0 ? 'menu_0' : `menu_${Date.now()}_${index}`
         menuMapping[index] = menuId
+        
+        // Registrar este título para reuso futuro (se não for o menu raiz, que já está registrado)
+        if (index !== 0 && cleanTitle) {
+          titleToMenuId[cleanTitle] = menuId
+        }
 
         const messageLines: string[] = []
         const options: MenuOption[] = []
@@ -165,13 +173,25 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
         const lines = section.split('\n').map(l => l.trim()).filter(Boolean)
         const firstLine = lines[0].toLowerCase()
         
-        // Se for uma seção de gatilho do Menu Principal, ela já foi mapeada para menu_0
-        // e não precisa ser processada como um novo nó de destino
-        if (firstLine.includes('menu principal') && (firstLine.includes('se responder') || firstLine.includes('se escolher'))) {
-          return
+        // Se esta seção foi mapeada para um menu já existente (reuso), 
+        // não precisamos processá-la como um novo nó de destino (ela já é o destino)
+        const isTriggerSection = firstLine.includes('se responder') || firstLine.includes('se escolher')
+        const cleanTitle = lines[0].replace(/^(se responder|se escolher)\s+/i, '').replace(/[0-9]️⃣|[0-9][\.\)\-\s]?/g, '').trim().toLowerCase()
+        
+        // Se o menuMapping para este index aponta para algo que já existe no menus,
+        // significa que é uma seção de "ponte" (reuso) e não deve criar novas conexões a partir daqui
+        // A MENOS QUE seja a primeira vez que esse título aparece (quando ele é criado)
+        const menuId = menuMapping[index]
+        if (isTriggerSection && menus[menuId] && Object.keys(menus).indexOf(menuId) !== -1) {
+           // Se o menu já existe e não foi criado NESTA iteração do forEach (index), 
+           // então é apenas uma referência de reuso.
+           // Mas como o forEach de criação e o de link são separados, precisamos de outra lógica:
+           // Se a seção é um gatilho e o menuId já está preenchido no objeto 'menus',
+           // significa que esta seção é apenas para apontar um link, não para definir conteúdo.
+           return
         }
         
-        if (firstLine.includes('se responder') || firstLine.includes('se escolher')) {
+        if (isTriggerSection) {
           // 1. Tentar vincular por número (ex: "Se responder 1")
           const numMatch = /(?:se responder|se escolher)[^\d]*([0-9]️⃣|[0-9])/.exec(firstLine)
           
