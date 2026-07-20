@@ -228,6 +228,13 @@ export default function Dashboard() {
 
       if (response.ok) {
         toast.success('Reconectando ao WhatsApp...')
+        
+        // Se houver um número salvo, abre o modal de pairing automaticamente
+        if (instance?.phoneNumber) {
+          setConnectMethod('pairing')
+          setShowConnectModal(true)
+        }
+        
         startFastPolling()
       } else {
         const data = await response.json()
@@ -501,13 +508,7 @@ export default function Dashboard() {
                   >
                     <LogOut className="w-4 h-4" />
                   </button>
-                  <button 
-                    onClick={handleReset}
-                    className="p-1.5 hover:bg-red-600/10 text-zinc-500 hover:text-red-600 rounded-lg transition-all"
-                    title="Reset Total (Limpar Sessão)"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+
                 </div>
               )}
             </div>

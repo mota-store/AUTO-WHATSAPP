@@ -94,7 +94,8 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
       }
 
       // Normalizar quebras de linha e separadores para garantir leitura total
-      const normalizedScript = script.replace(/\r\n/g, '\n').replace(/\n\s*---\s*\n/g, '\n---\n')
+      // Aceita --- com qualquer quantidade de hífens, espaços ou quebras de linha ao redor
+      const normalizedScript = script.replace(/\r\n/g, '\n').replace(/\n\s*-{3,}\s*\n/g, '\n---\n')
       const sections = normalizedScript.split('\n---\n').map(s => s.trim()).filter(Boolean)
       
       if (sections.length === 0) {
