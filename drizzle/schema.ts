@@ -75,6 +75,8 @@ export interface MenuOption {
   text: string;
   nextMenuId?: string;
   response?: string;
+  attachmentName?: string;
+  attachmentData?: string; // Base64 do arquivo
 }
 
 export interface MenuNode {

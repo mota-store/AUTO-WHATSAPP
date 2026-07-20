@@ -16,7 +16,9 @@ import {
   ChevronLeft,
   RefreshCw,
   Send,
-  Wand2
+  Wand2,
+  FileText,
+  X
 } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
 import FlowGenerator from '../components/FlowGenerator'
@@ -27,6 +29,8 @@ interface MenuOption {
   text: string
   nextMenuId?: string
   response?: string
+  attachmentName?: string
+  attachmentData?: string
 }
 
 interface MenuNode {
@@ -506,31 +510,82 @@ export default function FlowEditor() {
                                   className="w-full bg-transparent border-b border-border focus:border-primary outline-none py-0.5 font-bold text-xs transition-all"
                                 />
                               </div>
-                              <div className="flex gap-2 w-full sm:w-auto justify-end">
-                                {option.number !== 0 && (
+                              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto items-end sm:items-center">
+                                {/* Upload de Arquivo .txt */}
+                                <div className="relative group/file">
+                                  {option.attachmentName ? (
+                                    <div className="flex items-center gap-1 bg-emerald-500/10 text-emerald-500 px-2 py-1.5 rounded-lg border border-emerald-500/20 max-w-[120px]">
+                                      <FileText className="w-3 h-3 shrink-0" />
+                                      <span className="text-[9px] font-black truncate">{option.attachmentName}</span>
+                                      <button 
+                                        onClick={() => {
+                                          const newMenus = { ...flowData.menus };
+                                          newMenus[selectedMenuId].options[index].attachmentName = undefined;
+                                          newMenus[selectedMenuId].options[index].attachmentData = undefined;
+                                          setFlowData({ ...flowData, menus: newMenus });
+                                        }}
+                                        className="hover:text-red-500 transition-colors"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <label className="flex items-center gap-1 px-2 py-1.5 bg-zinc-800 text-zinc-400 rounded-lg font-black text-[9px] hover:bg-zinc-700 cursor-pointer transition-all">
+                                      <FileText className="w-3 h-3" /> .TXT
+                                      <input 
+                                        type="file" 
+                                        accept=".txt"
+                                        className="hidden"
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0];
+                                          if (file) {
+                                            if (file.size > 2 * 1024 * 1024) {
+                                              toast.error('Arquivo muito grande (máx 2MB)');
+                                              return;
+                                            }
+                                            const reader = new FileReader();
+                                            reader.onload = (event) => {
+                                              const data = event.target?.result as string;
+                                              const newMenus = { ...flowData.menus };
+                                              newMenus[selectedMenuId].options[index].attachmentName = file.name;
+                                              newMenus[selectedMenuId].options[index].attachmentData = data;
+                                              setFlowData({ ...flowData, menus: newMenus });
+                                              toast.success('Arquivo anexado!');
+                                            };
+                                            reader.readAsDataURL(file);
+                                          }
+                                        }}
+                                      />
+                                    </label>
+                                  )}
+                                </div>
+
+                                <div className="flex gap-2">
+                                  {option.number !== 0 && (
+                                    <button 
+                                      onClick={() => {
+                                        if (option.nextMenuId) {
+                                          setSelectedMenuId(option.nextMenuId);
+                                        } else {
+                                          createNextStep(option.id);
+                                        }
+                                      }}
+                                      className={`flex items-center gap-2 px-4 py-3 rounded-2xl font-black text-xs transition-all ${option.nextMenuId ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-primary/10 text-primary hover:bg-primary hover:text-white'}`}
+                                    >
+                                      <ChevronRight className="w-4 h-4" /> {option.nextMenuId ? 'Editar Resposta' : 'Criar Resposta'}
+                                    </button>
+                                  )}
                                   <button 
                                     onClick={() => {
-                                      if (option.nextMenuId) {
-                                        setSelectedMenuId(option.nextMenuId);
-                                      } else {
-                                        createNextStep(option.id);
-                                      }
+                                      const newMenus = { ...flowData.menus };
+                                      newMenus[selectedMenuId].options = newMenus[selectedMenuId].options.filter(o => o.id !== option.id);
+                                      setFlowData({ ...flowData, menus: newMenus });
                                     }}
-                                    className={`flex items-center gap-2 px-4 py-3 rounded-2xl font-black text-xs transition-all ${option.nextMenuId ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-primary/10 text-primary hover:bg-primary hover:text-white'}`}
+                                    className="p-3 bg-destructive/10 text-destructive rounded-2xl hover:bg-destructive hover:text-white transition-all"
                                   >
-                                    <ChevronRight className="w-4 h-4" /> {option.nextMenuId ? 'Editar Resposta' : 'Criar Resposta'}
+                                    <Trash2 className="w-5 h-5" />
                                   </button>
-                                )}
-                                <button 
-                                  onClick={() => {
-                                    const newMenus = { ...flowData.menus };
-                                    newMenus[selectedMenuId].options = newMenus[selectedMenuId].options.filter(o => o.id !== option.id);
-                                    setFlowData({ ...flowData, menus: newMenus });
-                                  }}
-                                  className="p-3 bg-destructive/10 text-destructive rounded-2xl hover:bg-destructive hover:text-white transition-all"
-                                >
-                                  <Trash2 className="w-5 h-5" />
-                                </button>
+                                </div>
                               </div>
                             </div>
                           </div>

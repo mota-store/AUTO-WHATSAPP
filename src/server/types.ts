@@ -18,6 +18,8 @@ export interface MenuOption {
   text: string
   nextMenuId?: string
   response?: string
+  attachmentName?: string
+  attachmentData?: string
 }
 
 export interface MenuNode {

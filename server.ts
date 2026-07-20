@@ -531,6 +531,21 @@ async function processMessage(sock: any, msg: WAMessage, userId: number, instanc
         await sock.sendMessage(from, { text: option.response })
       }
 
+      // Enviar anexo se existir
+      if (option.attachmentData && option.attachmentName) {
+        try {
+          console.log(`[MOTA-FLOW] Enviando anexo: ${option.attachmentName} para ${from}`)
+          const buffer = Buffer.from(option.attachmentData.split(',')[1] || option.attachmentData, 'base64')
+          await sock.sendMessage(from, { 
+            document: buffer, 
+            fileName: option.attachmentName,
+            mimetype: 'text/plain'
+          })
+        } catch (err) {
+          console.error(`[MOTA-FLOW] Erro ao enviar anexo:`, err)
+        }
+      }
+
       if (option.nextMenuId && flowData.menus[option.nextMenuId]) {
         const nextMenu = flowData.menus[option.nextMenuId]
         await sendMenu(sock, from, nextMenu)
