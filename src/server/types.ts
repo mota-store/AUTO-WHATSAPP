@@ -20,6 +20,9 @@ export interface MenuOption {
   response?: string
   attachmentName?: string
   attachmentData?: string
+  delay?: number
+  isTyping?: boolean
+  isRecording?: boolean
 }
 
 export interface MenuNode {
@@ -27,6 +30,9 @@ export interface MenuNode {
   title: string
   message: string
   options: MenuOption[]
+  delay?: number
+  isTyping?: boolean
+  isRecording?: boolean
 }
 
 export interface MenuFlowData {

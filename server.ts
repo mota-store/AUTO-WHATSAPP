@@ -543,6 +543,18 @@ async function processMessage(sock: any, msg: WAMessage, userId: number, instanc
     if (option) {
       console.log(`[MOTA-FLOW] [User ${userId}] Opção selecionada: ${option.number} - ${option.text}`)
       
+      // 1. Aplicar Humanização da Opção (Delay e Status)
+      if (option.delay || option.isTyping || option.isRecording) {
+        const presenceStatus = option.isRecording ? 'recording' : 'composing'
+        if (option.isTyping || option.isRecording) {
+          await sock.sendPresenceUpdate(presenceStatus, from)
+        }
+        if (option.delay) {
+          await new Promise(resolve => setTimeout(resolve, option.delay! * 1000))
+        }
+        await sock.sendPresenceUpdate('paused', from)
+      }
+
       if (option.response) {
         await sock.sendMessage(from, { text: option.response })
       }
@@ -605,6 +617,18 @@ async function processMessage(sock: any, msg: WAMessage, userId: number, instanc
 
 async function sendMenu(sock: any, to: string, menu: MenuNode) {
   try {
+    // 1. Aplicar Humanização do Menu (Delay e Status)
+    if (menu.delay || menu.isTyping || menu.isRecording) {
+      const presenceStatus = menu.isRecording ? 'recording' : 'composing'
+      if (menu.isTyping || menu.isRecording) {
+        await sock.sendPresenceUpdate(presenceStatus, to)
+      }
+      if (menu.delay) {
+        await new Promise(resolve => setTimeout(resolve, menu.delay! * 1000))
+      }
+      await sock.sendPresenceUpdate('paused', to)
+    }
+
     let text = `${menu.message}`
     
     if (menu.options && menu.options.length > 0) {

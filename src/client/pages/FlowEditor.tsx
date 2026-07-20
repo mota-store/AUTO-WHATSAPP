@@ -21,6 +21,8 @@ import {
   Image as ImageIcon,
   Mic,
   Video,
+  Clock,
+  Keyboard,
   X
 } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
@@ -481,9 +483,53 @@ export default function FlowEditor() {
               ) : (
                 /* Editor Passo a Passo */
                 <div className="glass-card rounded-xl p-3 border border-border/50 space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <div>
-                    <h2 className="text-lg font-black tracking-tight mb-1">{selectedMenu.title}</h2>
-                    <p className="text-muted-foreground font-medium text-xs">Escreva o que o robô vai responder nesta etapa.</p>
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                      <h2 className="text-lg font-black tracking-tight mb-1">{selectedMenu.title}</h2>
+                      <p className="text-muted-foreground font-medium text-xs">Escreva o que o robô vai responder nesta etapa.</p>
+                    </div>
+                    
+                    {/* Controles de Humanização do Menu */}
+                    <div className="flex items-center gap-2 bg-muted/30 p-2 rounded-2xl border border-border/50">
+                      <div className="flex items-center gap-1 px-2 border-r border-border/50">
+                        <Clock className="w-3 h-3 text-primary" />
+                        <input 
+                          type="number" 
+                          value={selectedMenu.delay || 0}
+                          onChange={(e) => {
+                            const newMenus = { ...flowData.menus };
+                            newMenus[selectedMenuId].delay = parseInt(e.target.value);
+                            setFlowData({ ...flowData, menus: newMenus });
+                          }}
+                          className="w-8 bg-transparent text-[10px] font-black outline-none"
+                        />
+                        <span className="text-[8px] font-black text-muted-foreground uppercase">s</span>
+                      </div>
+                      <button 
+                        onClick={() => {
+                          const newMenus = { ...flowData.menus };
+                          newMenus[selectedMenuId].isTyping = !newMenus[selectedMenuId].isTyping;
+                          if (newMenus[selectedMenuId].isTyping) newMenus[selectedMenuId].isRecording = false;
+                          setFlowData({ ...flowData, menus: newMenus });
+                        }}
+                        className={`p-1.5 rounded-lg transition-all ${selectedMenu.isTyping ? 'bg-primary text-white' : 'text-muted-foreground hover:bg-muted'}`}
+                        title="Simular Digitando"
+                      >
+                        <Keyboard className="w-3.5 h-3.5" />
+                      </button>
+                      <button 
+                        onClick={() => {
+                          const newMenus = { ...flowData.menus };
+                          newMenus[selectedMenuId].isRecording = !newMenus[selectedMenuId].isRecording;
+                          if (newMenus[selectedMenuId].isRecording) newMenus[selectedMenuId].isTyping = false;
+                          setFlowData({ ...flowData, menus: newMenus });
+                        }}
+                        className={`p-1.5 rounded-lg transition-all ${selectedMenu.isRecording ? 'bg-primary text-white' : 'text-muted-foreground hover:bg-muted'}`}
+                        title="Simular Gravando Áudio"
+                      >
+                        <Mic className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="space-y-3">
@@ -545,6 +591,45 @@ export default function FlowEditor() {
                                 />
                               </div>
                               <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto items-end sm:items-center">
+                                {/* Humanização da Opção */}
+                                <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-xl border border-border/50">
+                                  <div className="flex items-center gap-0.5 px-1.5 border-r border-border/50">
+                                    <Clock className="w-2.5 h-2.5 text-primary" />
+                                    <input 
+                                      type="number" 
+                                      value={option.delay || 0}
+                                      onChange={(e) => {
+                                        const newMenus = { ...flowData.menus };
+                                        newMenus[selectedMenuId].options[index].delay = parseInt(e.target.value);
+                                        setFlowData({ ...flowData, menus: newMenus });
+                                      }}
+                                      className="w-6 bg-transparent text-[9px] font-black outline-none"
+                                    />
+                                  </div>
+                                  <button 
+                                    onClick={() => {
+                                      const newMenus = { ...flowData.menus };
+                                      newMenus[selectedMenuId].options[index].isTyping = !newMenus[selectedMenuId].options[index].isTyping;
+                                      if (newMenus[selectedMenuId].options[index].isTyping) newMenus[selectedMenuId].options[index].isRecording = false;
+                                      setFlowData({ ...flowData, menus: newMenus });
+                                    }}
+                                    className={`p-1 rounded-md transition-all ${option.isTyping ? 'bg-primary text-white' : 'text-muted-foreground'}`}
+                                  >
+                                    <Keyboard className="w-2.5 h-2.5" />
+                                  </button>
+                                  <button 
+                                    onClick={() => {
+                                      const newMenus = { ...flowData.menus };
+                                      newMenus[selectedMenuId].options[index].isRecording = !newMenus[selectedMenuId].options[index].isRecording;
+                                      if (newMenus[selectedMenuId].options[index].isRecording) newMenus[selectedMenuId].options[index].isTyping = false;
+                                      setFlowData({ ...flowData, menus: newMenus });
+                                    }}
+                                    className={`p-1 rounded-md transition-all ${option.isRecording ? 'bg-primary text-white' : 'text-muted-foreground'}`}
+                                  >
+                                    <Mic className="w-2.5 h-2.5" />
+                                  </button>
+                                </div>
+
                                 {/* Upload de Arquivo .txt */}
                                 <div className="relative group/file">
                                   {option.attachmentName ? (
