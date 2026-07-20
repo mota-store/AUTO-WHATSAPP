@@ -93,7 +93,10 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
         return
       }
 
-      const sections = script.split(/\n---\n|\n---\s*\n/).map(s => s.trim()).filter(Boolean)
+      // Normalizar quebras de linha e separadores para garantir leitura total
+      const normalizedScript = script.replace(/\r\n/g, '\n').replace(/\n\s*---\s*\n/g, '\n---\n')
+      const sections = normalizedScript.split('\n---\n').map(s => s.trim()).filter(Boolean)
+      
       if (sections.length === 0) {
         setError('Roteiro inválido. Use "---" para separar as seções.')
         return
@@ -155,16 +158,20 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
           const numMatch = /(?:se responder|se escolher)[^\d]*([0-9]️⃣|[0-9])/.exec(firstLine)
           
           // 2. Tentar vincular por texto (ex: "Se responder Comprar uma assinatura")
-          const textTrigger = lines[0].replace(/^(se responder|se escolher)\s+/i, '').trim()
+          // Limpar o gatilho de emojis e espaços para busca flexível
+          const cleanTrigger = lines[0]
+            .replace(/^(se responder|se escolher)\s+/i, '')
+            .replace(/[0-9]️⃣|[0-9][\.\)\-\s]?/g, '')
+            .trim()
+            .toLowerCase()
           
           let linked = false
           
-          // Procurar em todos os menus anteriores
-          for (let i = 0; i < index; i++) { 
-            const prevMenuId = menuMapping[i]
+          // Procurar em TODOS os menus já criados (não apenas os anteriores imediatos)
+          for (const prevMenuId in menus) {
             const options = menus[prevMenuId].options
             
-            // Tentar achar por número primeiro
+            // Tentar por número primeiro (se houver número no gatilho)
             if (numMatch) {
               const targetNum = parseInt(numMatch[1].replace(/[^0-9]/g, ""))
               const option = options.find(o => o.number === targetNum)
@@ -175,12 +182,13 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
               }
             }
             
-            // Se não achou por número, tentar por texto
-            if (!linked && textTrigger) {
-              const option = options.find(o => 
-                o.text.toLowerCase().includes(textTrigger.toLowerCase()) || 
-                textTrigger.toLowerCase().includes(o.text.toLowerCase())
-              )
+            // Tentar por texto (busca inteligente e flexível)
+            if (!linked && cleanTrigger) {
+              const option = options.find(o => {
+                const cleanOptionText = o.text.toLowerCase().trim()
+                return cleanOptionText.includes(cleanTrigger) || cleanTrigger.includes(cleanOptionText)
+              })
+              
               if (option && !option.nextMenuId) {
                 option.nextMenuId = menuMapping[index]
                 linked = true
