@@ -244,8 +244,8 @@ function cleanPhoneNumber(num: string): string {
 }
 
 async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber?: string, isReconnect = false) {
-  // Removida a trava de segurança no início pois ela bloqueia reconexões legítimas
-  // connectionLocks.set(userId, true)
+  // Garantir que não haja travas bloqueando o "choque" de reconexão
+  connectionLocks.delete(userId)
   
   const sessionPath = path.join(process.cwd(), 'sessions', `session_${userId}`)
 
@@ -695,19 +695,32 @@ app.post('/api/whatsapp/reconnect', authMiddleware, async (req: Request, res: Re
       return res.status(404).json({ message: 'Instância WhatsApp não encontrada' })
     }
 
+    console.log(`[MOTA-FLOW] [User ${user.userId}] Executando "choque" de reconexão forçada...`)
+
+    // Liberar qualquer trava existente
+    connectionLocks.delete(user.userId)
+    reconnectAttempts.delete(user.userId)
+
     const sock = sessions.get(user.userId)
     if (sock) {
-      sock.ev.removeAllListeners('connection.update')
-      sock.ev.removeAllListeners('creds.update')
-      sock.ev.removeAllListeners('messages.upsert')
-      try { sock.ws.close() } catch (e) {}
+      try {
+        sock.ev.removeAllListeners('connection.update')
+        sock.ev.removeAllListeners('creds.update')
+        sock.ev.removeAllListeners('messages.upsert')
+        sock.ws.close()
+      } catch (e) {}
       sessions.delete(user.userId)
     }
 
+    // Atualizar status para conectando IMEDIATAMENTE
     await db.updateWhatsappInstance(instance.id, { status: 'connecting', qrCode: null, pairingCode: null })
-    connectToWhatsApp(user.userId, instance.id, instance.phoneNumber || undefined, true)
+    
+    // Iniciar conexão forçada mantendo a sessão (isReconnect = true)
+    connectToWhatsApp(user.userId, instance.id, instance.phoneNumber || undefined, true).catch(err => {
+      console.error(`[MOTA-FLOW] Erro no choque de conexão:`, err)
+    })
 
-    res.json({ success: true, message: 'Reconectando...' })
+    res.json({ success: true, message: 'Reconexão forçada iniciada' })
   } catch (error) {
     console.error(`[MOTA-FLOW] Erro ao reconectar:`, error)
     res.status(500).json({ success: false, message: 'Erro ao reconectar' })
