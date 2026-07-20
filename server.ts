@@ -24,6 +24,7 @@ import { fileURLToPath } from 'url'
 
 const execAsync = promisify(exec)
 const sessions = new Map<number, any>()
+const connectionLocks = new Map<number, boolean>()
 const messageStates = new Map<string, { 
   flowId: number, 
   menuId: string, 
@@ -235,6 +236,13 @@ function cleanPhoneNumber(num: string): string {
 }
 
 async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber?: string, isReconnect = false) {
+  // Trava de segurança para evitar loops
+  if (connectionLocks.get(userId) && !isReconnect) {
+    console.log(`[MOTA-FLOW] [User ${userId}] Já existe uma tentativa de conexão em curso. Ignorando nova chamada.`)
+    return
+  }
+  connectionLocks.set(userId, true)
+  
   const sessionPath = path.join(process.cwd(), 'sessions', `session_${userId}`)
 
   // Fechar socket antigo se existir para evitar leaks e conflitos
@@ -250,10 +258,12 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     sessions.delete(userId)
   }
 
-  if (!isReconnect) {
+  // Apenas limpa a sessão se não for um erro 515 ou tentativa de reconexão
+  if (!isReconnect && !phoneNumber) {
     if (fs.existsSync(sessionPath)) {
       try {
-        fs.rmSync(sessionPath, { recursive: true, force: true })
+        // Não deletar se houver credenciais válidas, a menos que seja um reset explícito
+        console.log(`[MOTA-FLOW] [User ${userId}] Mantendo sessão existente para estabilidade.`)
       } catch (e) {}
     }
   }
@@ -349,11 +359,16 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       console.log(`[MOTA-FLOW] [User ${userId}] Conexão fechada. Status: ${statusCode}`)
       
       const isLoggedOut = statusCode === DisconnectReason.loggedOut || 
-                         statusCode === 401 || // Unauthorized
-                         statusCode === 403 || // Forbidden
-                         statusCode === 440 || // Session expired
-                         statusCode === DisconnectReason.connectionClosed || // Conexão fechada pelo usuário ou rede
-                         statusCode === DisconnectReason.timedOut    // Tempo limite excedido
+                         statusCode === 401 ||
+                         statusCode === 403 ||
+                         statusCode === 440
+
+      // Erro 515 (Restart Required) - APENAS RECONECTAR, NÃO LIMPAR NADA
+      if (statusCode === 515) {
+        console.log(`[MOTA-FLOW] [User ${userId}] Erro 515 detectado: Reiniciando socket sem limpar dados...`)
+        setTimeout(() => connectToWhatsApp(userId, instanceId, phoneNumber, true), 2000)
+        return
+      }
 
       if (!isLoggedOut) {
         // Implementar retry com backoff exponencial
@@ -401,6 +416,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
         }
       } else {
         console.log(`[MOTA-FLOW] [User ${userId}] Logout detectado ou sessão encerrada permanentemente.`)
+        connectionLocks.delete(userId) // Liberar trava
         await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null, pairingCode: null, phoneNumber: null })
         sessions.delete(userId)
         if (fs.existsSync(sessionPath)) {
@@ -413,6 +429,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
 
     if (connection === 'open') {
       console.log(`[MOTA-FLOW] [User ${userId}] Conexão aberta com sucesso! Atualizando banco de dados...`)
+      connectionLocks.delete(userId) // Liberar trava
       const phone = sock.user?.id.split(':')[0]
       
       try {
@@ -702,6 +719,7 @@ app.post('/api/whatsapp/reset', authMiddleware, async (req: Request, res: Respon
       }
       const sessionPath = path.join(process.cwd(), 'sessions', `session_${user.userId}`)
       if (fs.existsSync(sessionPath)) fs.rmSync(sessionPath, { recursive: true, force: true })
+      connectionLocks.delete(user.userId) // Liberar trava no reset
       await db.updateWhatsappInstance(instance.id, { status: 'disconnected', qrCode: null, pairingCode: null, phoneNumber: null })
       res.json({ message: 'Resetado' })
     } else {
