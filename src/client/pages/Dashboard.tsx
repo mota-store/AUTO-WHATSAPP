@@ -90,9 +90,14 @@ export default function Dashboard() {
           setIsConnecting(false)
           stopFastPolling()
         }
+
+        // Log de diagnóstico se estiver em modo de conexão
+        if (isConnecting && !data.instance?.pairingCode && !data.instance?.qrCode) {
+          console.log('[MOTA-FLOW] Aguardando geração de código pelo servidor...')
+        }
       }
     } catch (error) {
-      console.error('Erro ao carregar dashboard')
+      console.error('Erro ao carregar dashboard:', error)
     } finally {
       setIsLoading(false)
     }

@@ -302,26 +302,36 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     // Aguardar o socket estar conectado antes de solicitar pairing code
     const waitForConnection = setInterval(async () => {
       // Verificar sock.ws.readyState diretamente para ser mais rápido
+      // O Baileys às vezes demora para setar isOpen, então verificamos o estado do WebSocket
       const isOpen = sock.ws && (sock.ws.isOpen || (sock.ws as any).readyState === 1)
+      
       if (isOpen) {
         clearInterval(waitForConnection)
         try {
-          console.log(`[MOTA-FLOW] [User ${userId}] Socket conectado, solicitando pairing code para ${cleanNumber}...`)
+          console.log(`[MOTA-FLOW] [User ${userId}] Socket aberto (readyState: ${sock.ws ? (sock.ws as any).readyState : 'null'}), solicitando pairing code para ${cleanNumber}...`)
+          
+          // Dar um pequeno delay de 1s para o Baileys inicializar o estado interno após o socket abrir
+          await new Promise(resolve => setTimeout(resolve, 1500))
+          
           if (sock.authState.creds.registered) {
             console.log(`[MOTA-FLOW] [User ${userId}] Socket já registrado, pulando pairing code`)
             return
           }
           
-          // Solicitar pairing code imediatamente
+          console.log(`[MOTA-FLOW] [User ${userId}] Chamando requestPairingCode para ${cleanNumber}...`)
           const code = await sock.requestPairingCode(cleanNumber)
           console.log(`[MOTA-FLOW] [User ${userId}] ✅ Pairing code recebido: ${code}`)
           await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
         } catch (err: any) {
           console.error(`[MOTA-FLOW] [User ${userId}] ❌ Erro ao obter pairing code:`, err.message)
-          await db.updateWhatsappInstance(instanceId, { status: 'disconnected', pairingCode: null, qrCode: null })
+          // Se falhar, tentamos de novo em 3 segundos se ainda estiver conectando
+          setTimeout(() => {
+            console.log(`[MOTA-FLOW] [User ${userId}] Tentando novamente solicitar pairing code...`)
+            connectToWhatsApp(userId, instanceId, phoneNumber, false)
+          }, 3000)
         }
       }
-    }, 500) // Verificar a cada 500ms para ser mais rápido
+    }, 1000)
     
     // Timeout de segurança: se não conectar em 60 segundos, cancelar
     setTimeout(() => clearInterval(waitForConnection), 60000)
@@ -430,7 +440,10 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     }
   })
 
-  sock.ev.on('creds.update', saveCreds)
+  sock.ev.on('creds.update', async () => {
+    console.log(`[MOTA-FLOW] [User ${userId}] Salvando credenciais atualizadas...`)
+    await saveCreds()
+  })
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     // Processar tanto notify quanto append para garantir que nada escape
