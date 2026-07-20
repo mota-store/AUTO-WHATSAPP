@@ -412,9 +412,21 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     }
 
     if (connection === 'open') {
-      console.log(`[MOTA-FLOW] [User ${userId}] Conexão aberta com sucesso!`)
+      console.log(`[MOTA-FLOW] [User ${userId}] Conexão aberta com sucesso! Atualizando banco de dados...`)
       const phone = sock.user?.id.split(':')[0]
-      await db.updateWhatsappInstance(instanceId, { status: 'connected', phoneNumber: phone, qrCode: null, pairingCode: null })
+      
+      try {
+        await db.updateWhatsappInstance(instanceId, { 
+          status: 'connected', 
+          phoneNumber: phone, 
+          qrCode: null, 
+          pairingCode: null 
+        })
+        console.log(`[MOTA-FLOW] [User ${userId}] Status 'connected' persistido no banco de dados para o número ${phone}`)
+      } catch (dbErr: any) {
+        console.error(`[MOTA-FLOW] [User ${userId}] Erro ao persistir status 'connected':`, dbErr.message)
+      }
+
       // Limpar contador de retry quando conecta com sucesso
       reconnectAttempts.delete(userId)
       
