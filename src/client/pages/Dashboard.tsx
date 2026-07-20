@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { 
   Zap, 
@@ -13,7 +13,8 @@ import {
   ArrowRight,
   X,
   BookOpen,
-  AlertTriangle
+  AlertTriangle,
+  Trash2
 } from 'lucide-react'
 import { toast } from 'sonner'
 import Sidebar from '../components/Sidebar'
