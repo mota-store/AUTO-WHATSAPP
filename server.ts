@@ -34,6 +34,8 @@ const messageStates = new Map<string, {
   lastInteraction?: number 
 }>()
 const reconnectAttempts = new Map<number, { count: number, lastAttempt: number }>()
+const lastResponseTime = new Map<string, number>()
+const COOLDOWN_TIME = 2 * 60 * 1000 // 2 minutos de silêncio antes de repetir o menu principal
 const app = express()
 const PORT = process.env.PORT || 8080
 
@@ -473,6 +475,22 @@ async function processMessage(sock: any, msg: WAMessage, userId: number, instanc
     const now = Date.now()
     const COOLDOWN_24H = 24 * 60 * 60 * 1000
     const isResetKeyword = ['menu', 'voltar', 'inicio', 'início'].includes(text.toLowerCase())
+
+    // TRAVA DE FLOOD / LOOP
+    const isRootMenu = !state || state.menuId === flowData.rootMenuId
+    if (isRootMenu && !isResetKeyword) {
+      const lastTime = lastResponseTime.get(from) || 0
+      const isOption = /^\d+$/.test(text)
+      
+      // Se já respondemos recentemente e não é uma opção numérica, ignorar
+      if (now - lastTime < COOLDOWN_TIME && !isOption) {
+        console.log(`[MOTA-FLOW] [User ${userId}] Ignorando flood de ${from} (Cooldown ativo)`)
+        return
+      }
+    }
+    
+    // Atualizar timestamp da última resposta processada
+    lastResponseTime.set(from, now)
 
     if (state?.status === 'finished' && !isResetKeyword) {
       if (state.lastInteraction && (now - state.lastInteraction < COOLDOWN_24H)) {
