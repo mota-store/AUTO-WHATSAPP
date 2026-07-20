@@ -260,9 +260,8 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
 
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
   
-  // CONFIGURAÇÃO MACOS CHROME (Para melhor compatibilidade com código de pareamento)
-  // Usar uma string de navegador altamente compatível simulando MacOS
-  const browserConfig = ['Mac OS', 'Chrome', '120.0.0.0']  // Simular Chrome 120 no MacOS
+  // CONFIGURAÇÃO UBUNTU CHROME (Confirmada como mais estável pelo usuário)
+  const browserConfig = ['Linux', 'Chrome', '120.0.0.0']  // Simular Chrome 120 no Linux
 
   console.log(`[MOTA-FLOW] [User ${userId}] Criando socket com versão: ${baileysVersion.join('.')}`)
   const sock = makeWASocket({
@@ -332,10 +331,16 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     const { connection, lastDisconnect, qr } = update
     console.log(`[MOTA-FLOW] [User ${userId}] Update de conexão: ${connection || 'status'}`)
 
-    if (qr && !phoneNumber) { // Só gera QR se não houver um número para pareamento
+    if (qr) {
       try {
         const qrDataURL = await QRCode.toDataURL(qr)
-        await db.updateWhatsappInstance(instanceId, { qrCode: qrDataURL, status: 'connecting', pairingCode: null })
+        // Se estivermos tentando pareamento por número, não sobrescrevemos o status, apenas guardamos o QR como fallback
+        const updateData: any = { qrCode: qrDataURL }
+        if (!phoneNumber) {
+          updateData.status = 'connecting'
+          updateData.pairingCode = null
+        }
+        await db.updateWhatsappInstance(instanceId, updateData)
       } catch (e) {
         console.error(`[MOTA-FLOW] [User ${userId}] Erro ao gerar QR Code:`, e)
       }
