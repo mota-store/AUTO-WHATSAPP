@@ -221,6 +221,29 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
 
             if (option) {
               option.nextMenuId = menuId
+              
+              // Se a seção do gatilho contém marcadores de mídia, preparamos o placeholder
+              const sectionLower = section.toLowerCase()
+              if (sectionLower.includes('[foto]')) {
+                option.attachmentName = 'foto_automacao.jpg'
+                option.attachmentData = 'PENDING_MEDIA_UPLOAD'
+              } else if (sectionLower.includes('[audio]')) {
+                option.attachmentName = 'audio_automacao.mp3'
+                option.attachmentData = 'PENDING_MEDIA_UPLOAD'
+              } else if (sectionLower.includes('[video]')) {
+                option.attachmentName = 'video_automacao.mp4'
+                option.attachmentData = 'PENDING_MEDIA_UPLOAD'
+              } else if (sectionLower.includes('[anexo]')) {
+                option.attachmentName = 'arquivo_automacao.pdf'
+                option.attachmentData = 'PENDING_MEDIA_UPLOAD'
+              }
+              
+              // Se houver um anexo global no Gerador, e for um placeholder, injetamos o dado real
+              if (attachment && option.attachmentData === 'PENDING_MEDIA_UPLOAD') {
+                option.attachmentName = attachment.name
+                option.attachmentData = attachment.data
+              }
+
               linked = true
             }
 
@@ -308,7 +331,7 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
             <textarea
               value={script}
               onChange={(e) => setScript(e.target.value)}
-              placeholder="🤖 Nome do Fluxo&#10;&#10;Olá! Escolha uma opção:&#10;1️⃣ Opção A&#10;2️⃣ Opção B&#10;&#10;---&#10;&#10;Se responder 1️⃣&#10;Texto para opção 1..."
+              placeholder="🤖 Nome do Fluxo&#10;&#10;Olá! Escolha uma opção:&#10;1️⃣ Opção A&#10;2️⃣ Opção B&#10;&#10;---&#10;&#10;Se responder 1️⃣&#10;[FOTO]&#10;Aqui está a foto do produto!&#10;&#10;---&#10;&#10;Se responder 2️⃣&#10;[AUDIO]&#10;Vou te explicar como funciona..."
               className="w-full h-64 p-4 bg-background border border-border rounded-2xl text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all resize-none"
             />
             {error && (
@@ -326,9 +349,9 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
               </h4>
               <ul className="text-[11px] font-bold text-muted-foreground space-y-1.5">
                 <li>• Use <code className="bg-primary/10 px-1 rounded">---</code> para separar as telas</li>
-                <li>• Use <code className="bg-primary/10 px-1 rounded">1️⃣</code>, <code className="bg-primary/10 px-1 rounded">2️⃣</code> para opções</li>
                 <li>• Use <code className="bg-primary/10 px-1 rounded">Se responder 1️⃣</code> para conectar</li>
-                <li>• O robô ignora o título nas mensagens</li>
+                <li>• Use <code className="bg-primary/10 px-1 rounded">[FOTO]</code>, <code className="bg-primary/10 px-1 rounded">[AUDIO]</code> ou <code className="bg-primary/10 px-1 rounded">[VIDEO]</code> no início da resposta</li>
+                <li>• O robô enviará a mídia se o arquivo global estiver anexado</li>
               </ul>
             </div>
             <div className="p-4 bg-muted/30 rounded-2xl border border-border/50">

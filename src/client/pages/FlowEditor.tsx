@@ -531,10 +531,10 @@ export default function FlowEditor() {
                                     </div>
                                   ) : (
                                     <label className="flex items-center gap-1 px-2 py-1.5 bg-zinc-800 text-zinc-400 rounded-lg font-black text-[9px] hover:bg-zinc-700 cursor-pointer transition-all">
-                                      <FileText className="w-3 h-3" /> .TXT
+                                      <FileText className="w-3 h-3" /> MÍDIA
                                       <input 
                                         type="file" 
-                                        accept=".txt"
+                                        accept=".txt,.jpg,.jpeg,.png,.mp3,.mp4,.pdf"
                                         className="hidden"
                                         onChange={(e) => {
                                           const file = e.target.files?.[0];

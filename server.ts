@@ -547,16 +547,27 @@ async function processMessage(sock: any, msg: WAMessage, userId: number, instanc
         await sock.sendMessage(from, { text: option.response })
       }
 
-      // Enviar anexo se existir
+      // Enviar anexo se existir (Suporte a Foto, Vídeo e Áudio)
       if (option.attachmentData && option.attachmentName) {
         try {
-          console.log(`[MOTA-FLOW] Enviando anexo: ${option.attachmentName} para ${from}`)
+          const fileName = option.attachmentName.toLowerCase()
+          console.log(`[MOTA-FLOW] Enviando mídia: ${fileName} para ${from}`)
           const buffer = Buffer.from(option.attachmentData.split(',')[1] || option.attachmentData, 'base64')
-          await sock.sendMessage(from, { 
-            document: buffer, 
-            fileName: option.attachmentName,
-            mimetype: 'text/plain'
-          })
+          
+          if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.png')) {
+            await sock.sendMessage(from, { image: buffer, caption: option.response || '' })
+          } else if (fileName.endsWith('.mp4')) {
+            await sock.sendMessage(from, { video: buffer, caption: option.response || '' })
+          } else if (fileName.endsWith('.mp3') || fileName.endsWith('.ogg') || fileName.endsWith('.wav')) {
+            await sock.sendMessage(from, { audio: buffer, ptt: true, mimetype: 'audio/mpeg' })
+          } else {
+            // Fallback para documentos genéricos
+            await sock.sendMessage(from, { 
+              document: buffer, 
+              fileName: option.attachmentName,
+              mimetype: fileName.endsWith('.pdf') ? 'application/pdf' : 'text/plain'
+            })
+          }
         } catch (err) {
           console.error(`[MOTA-FLOW] Erro ao enviar anexo:`, err)
         }
