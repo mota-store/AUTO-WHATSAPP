@@ -271,8 +271,8 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
 
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath)
   
-  // CONFIGURAÇÃO MOTAFLOW CHROME
-  const browserConfig = Browsers.appropriate('MotaFlow')
+  // CONFIGURAÇÃO MOTAFLOW CHROME (Identificado como Chrome para estabilidade)
+  const browserConfig: [string, string, string] = ['MotaFlow', 'Chrome', '1.0.0']
 
   console.log(`[MOTA-FLOW] [User ${userId}] Criando socket com versão: ${baileysVersion.join('.')}`)
   const sock = makeWASocket({
