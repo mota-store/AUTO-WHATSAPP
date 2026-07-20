@@ -79,37 +79,28 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
         const menuId = index === 0 ? 'menu_0' : `menu_${Date.now()}_${index}`
         menuMapping[index] = menuId
 
-        // Extract title (first line if it starts with 🤖 or just first line)
+        // Extract title
         let title = lines[0].replace(/^[🤖\s]+/, '')
-
-        // If it's a "Se responder X" section, the title is the trigger
         if (lines[0].toLowerCase().startsWith('se responder') || lines[0].toLowerCase().startsWith('se escolher')) {
           title = lines[0]
         }
 
-        // Build message and extract options
         const messageLines: string[] = []
         const options: MenuOption[] = []
-        
-        // Skip trigger/title line for message content if it's not the first menu
         const startLine = (index === 0) ? 0 : 1
         
         for (let i = startLine; i < lines.length; i++) {
           const line = lines[i]
-          // Match emojis like 1️⃣, 2️⃣, etc. or just numbers 1., 2.
           const optionMatch = line.match(/^([0-9]️⃣|[0-9]\.)\s*(.*)/)
           
           if (optionMatch) {
-            const numStr = optionMatch[1].replace(/[^0-9]/g, '') // Allow 0
+            const numStr = optionMatch[1].replace(/[^0-9]/g, '')
             const num = parseInt(numStr)
             options.push({
               id: `opt_${Date.now()}_${index}_${num}`,
               number: num,
               text: optionMatch[2].trim(),
-              response: '',
-              // Se for a primeira seção e houver um anexo global, adiciona às opções que não levam a outro menu
-              attachmentName: attachment?.name,
-              attachmentData: attachment?.data
+              response: ''
             })
           } else {
             messageLines.push(line)
@@ -176,13 +167,26 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
         }
       })
 
+      // Final pass: Apply global attachment to all leaf options (options without nextMenuId)
+      if (attachment) {
+        Object.values(menus).forEach(menu => {
+          menu.options.forEach(opt => {
+            if (!opt.nextMenuId) {
+              opt.attachmentName = attachment.name
+              opt.attachmentData = attachment.data
+            }
+          })
+        })
+      }
+
+      console.log('[MOTA-FLOW] Fluxo gerado com sucesso:', { rootMenuId: 'menu_0', menus })
       onGenerate({
         rootMenuId: 'menu_0',
         menus
       })
       onClose()
     } catch (err) {
-      console.error(err)
+      console.error('[MOTA-FLOW] Erro no parser:', err)
       setError('Erro ao processar o roteiro. Verifique a formatação.')
     }
   }
