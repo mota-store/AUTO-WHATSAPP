@@ -44,17 +44,12 @@ console.log('🚀 [MOTA-FLOW] Iniciando servidor...')
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }))
 app.use(express.json({ limit: '10mb' }))
 
-let baileysVersion: [number, number, number] = [2, 3000, 14]  // Versão mais recente com melhor compatibilidade
+// Fixar versão estável para evitar problemas com versões dinâmicas
+let baileysVersion: [number, number, number] = [2, 3000, 1015901307] 
 
 async function preloadBaileysVersion() {
-  try {
-    console.log('[MOTA-FLOW] Iniciando preload de versão Baileys...')
-    const result = await fetchLatestBaileysVersion()
-    baileysVersion = (result as any).version
-    console.log(`✅ [MOTA-FLOW] Versão Baileys atualizada: ${baileysVersion.join('.')}`)
-  } catch (err) {
-    console.log('⚠️ [MOTA-FLOW] Usando versão fallback (sem atualização):', baileysVersion.join('.'))
-  }
+  console.log('[MOTA-FLOW] Usando versão fixa estável do Baileys:', baileysVersion.join('.'))
+  // Desativado fetch dinâmico para evitar versões quebradas
 }
 
 async function authMiddleware(req: Request, res: Response, next: NextFunction) {
@@ -276,13 +271,7 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
     },
-    logger: pino({ 
-      level: phoneNumber ? 'debug' : 'silent',  // Logs detalhados durante pareamento
-      transport: phoneNumber ? {
-        target: 'pino-pretty',
-        options: { colorize: true }
-      } : undefined
-    }),
+    logger: pino({ level: 'silent' }), // Simplificar logger para evitar erro de pino-pretty em produção
     browser: browserConfig,
     connectTimeoutMs: 60000,
     printQRInTerminal: false,
