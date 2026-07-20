@@ -325,7 +325,7 @@ export default function Dashboard() {
                         <div className="space-y-2">
                           <p className="text-[10px] font-black text-primary uppercase tracking-widest">Seu Código de Acesso</p>
                           <div className="flex items-center justify-center gap-4">
-                            <span className="text-5xl font-black tracking-[0.2em] text-white font-mono">{instance.pairingCode.replace(/^(.{4})(.{4})$/, '$1-$2')}</span>
+                            <span className="text-3xl sm:text-4xl font-black tracking-[0.15em] text-white font-mono">{instance.pairingCode.replace(/^(.{4})(.{4})$/, '$1-$2')}</span>
                             <button 
                               onClick={() => copyToClipboard(instance.pairingCode!)}
                               className="p-4 bg-zinc-800 hover:bg-zinc-700 rounded-2xl transition-all shadow-lg active:scale-90"
