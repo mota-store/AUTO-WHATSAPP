@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { Wand2, X, AlertCircle, CheckCircle2, HelpCircle } from 'lucide-react'
+import { Wand2, X, AlertCircle, CheckCircle2, HelpCircle, FileText } from 'lucide-react'
+import { toast } from 'sonner'
 
 interface MenuOption {
   id: string
@@ -7,6 +8,8 @@ interface MenuOption {
   text: string
   nextMenuId?: string
   response?: string
+  attachmentName?: string
+  attachmentData?: string
 }
 
 interface MenuNode {
@@ -30,6 +33,26 @@ interface FlowGeneratorProps {
 export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGeneratorProps) {
   const [script, setScript] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [attachment, setAttachment] = useState<{ name: string, data: string } | null>(null)
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('Arquivo muito grande (máx 2MB)')
+        return
+      }
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        setAttachment({
+          name: file.name,
+          data: event.target?.result as string
+        })
+        toast.success('Arquivo .txt carregado!')
+      }
+      reader.readAsDataURL(file)
+    }
+  }
 
   if (!isOpen) return null
 
@@ -83,7 +106,10 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
               id: `opt_${Date.now()}_${index}_${num}`,
               number: num,
               text: optionMatch[2].trim(),
-              response: ''
+              response: '',
+              // Se for a primeira seção e houver um anexo global, adiciona às opções que não levam a outro menu
+              attachmentName: attachment?.name,
+              attachmentData: attachment?.data
             })
           } else {
             messageLines.push(line)
@@ -182,10 +208,30 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          <div className="space-y-2">
-            <label className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1">
-              <HelpCircle className="w-3 h-3" /> Cole seu roteiro estruturado abaixo
-            </label>
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <label className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1">
+                <HelpCircle className="w-3 h-3" /> Cole seu roteiro estruturado abaixo
+              </label>
+              
+              <div className="flex items-center gap-2">
+                {attachment ? (
+                  <div className="flex items-center gap-2 bg-emerald-500/10 text-emerald-500 px-3 py-1.5 rounded-xl border border-emerald-500/20">
+                    <FileText className="w-4 h-4" />
+                    <span className="text-[10px] font-black truncate max-w-[100px]">{attachment.name}</span>
+                    <button onClick={() => setAttachment(null)} className="hover:text-red-500">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-xl font-black text-[10px] hover:bg-primary hover:text-white cursor-pointer transition-all">
+                    <FileText className="w-4 h-4" /> ANEXAR .TXT GLOBAL
+                    <input type="file" accept=".txt" className="hidden" onChange={handleFileUpload} />
+                  </label>
+                )}
+              </div>
+            </div>
+            
             <textarea
               value={script}
               onChange={(e) => setScript(e.target.value)}
