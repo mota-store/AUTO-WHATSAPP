@@ -150,8 +150,16 @@ app.put('/api/auth/avatar', authMiddleware, async (req: Request, res: Response) 
 app.get('/api/dashboard', authMiddleware, async (req: Request, res: Response) => {
   try {
     const user = (req as any).user as AuthPayload
+    // Garantir que buscamos os dados mais frescos do banco
     const instance = await db.getWhatsappInstance(user.userId)
     const flows = await db.getUserMenuFlows(user.userId)
+    
+    // Desativar cache para este endpoint
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+    res.setHeader('Pragma', 'no-cache')
+    res.setHeader('Expires', '0')
+    res.setHeader('Surrogate-Control', 'no-store')
+    
     res.json({ instance, flows })
   } catch (error: any) {
     res.status(500).json({ message: 'Erro no dashboard' })
@@ -236,12 +244,8 @@ function cleanPhoneNumber(num: string): string {
 }
 
 async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber?: string, isReconnect = false) {
-  // Trava de segurança para evitar loops
-  if (connectionLocks.get(userId) && !isReconnect) {
-    console.log(`[MOTA-FLOW] [User ${userId}] Já existe uma tentativa de conexão em curso. Ignorando nova chamada.`)
-    return
-  }
-  connectionLocks.set(userId, true)
+  // Removida a trava de segurança no início pois ela bloqueia reconexões legítimas
+  // connectionLocks.set(userId, true)
   
   const sessionPath = path.join(process.cwd(), 'sessions', `session_${userId}`)
 
@@ -256,16 +260,6 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       oldSock.ws.close()
     } catch (e) {}
     sessions.delete(userId)
-  }
-
-  // Apenas limpa a sessão se não for um erro 515 ou tentativa de reconexão
-  if (!isReconnect && !phoneNumber) {
-    if (fs.existsSync(sessionPath)) {
-      try {
-        // Não deletar se houver credenciais válidas, a menos que seja um reset explícito
-        console.log(`[MOTA-FLOW] [User ${userId}] Mantendo sessão existente para estabilidade.`)
-      } catch (e) {}
-    }
   }
 
   const sessionDir = path.dirname(sessionPath)
@@ -285,64 +279,30 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
     },
-    logger: pino({ level: 'silent' }), // Simplificar logger para evitar erro de pino-pretty em produção
+    logger: pino({ level: 'silent' }),
     browser: browserConfig,
     connectTimeoutMs: 60000,
     printQRInTerminal: false,
-    syncFullHistory: false,  // Desativar sincronização completa para pareamento mais rápido
+    syncFullHistory: false,
     markOnlineOnConnect: true,
-    shouldSyncHistoryMessage: () => false,  // Não sincronizar mensagens de histórico durante pareamento
-    qrTimeout: 60000,  // Timeout para QR code
-    defaultQueryTimeoutMs: 60000,  // Timeout padrão para queries
+    shouldSyncHistoryMessage: () => false,
+    qrTimeout: 60000,
+    defaultQueryTimeoutMs: 60000,
   })
 
   console.log(`[MOTA-FLOW] [User ${userId}] Socket criado e armazenado com sucesso`)
   sessions.set(userId, sock)
-  const reconnectPhone = phoneNumber
-
-  if (!isReconnect && phoneNumber) {
-    const cleanNumber = cleanPhoneNumber(phoneNumber)
-    // Aguardar o evento de atualização de conexão para solicitar o código
-    // Isso é mais seguro do que um setInterval cego
-    const pairingHandler = async (update: any) => {
-      const { connection } = update
-      if (connection === 'connecting' || connection === 'open') {
-        // Dar um tempo para o socket estabilizar
-        await new Promise(resolve => setTimeout(resolve, 5000))
-        
-        try {
-          if (sock.authState.creds.registered) return
-          
-          console.log(`[MOTA-FLOW] [User ${userId}] Solicitando pairing code para ${cleanNumber}...`)
-          const code = await sock.requestPairingCode(cleanNumber)
-          console.log(`[MOTA-FLOW] [User ${userId}] ✅ Pairing code recebido: ${code}`)
-          await db.updateWhatsappInstance(instanceId, { status: 'connecting', pairingCode: code, qrCode: null })
-          
-          // Remover este listener após sucesso
-          sock.ev.off('connection.update', pairingHandler)
-        } catch (err: any) {
-          console.error(`[MOTA-FLOW] [User ${userId}] ❌ Erro ao obter pairing code:`, err.message)
-        }
-      }
-    }
-    
-    sock.ev.on('connection.update', pairingHandler)
-    
-    // Timeout de segurança para remover o listener
-    setTimeout(() => sock.ev.off('connection.update', pairingHandler), 60000)
-    
-    // Timeout de segurança: se não conectar em 60 segundos, cancelar
-    
-  }
+  
+  let pairingCodeRequested = false
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update
     console.log(`[MOTA-FLOW] [User ${userId}] Update de conexão: ${connection || 'status'}`)
 
+    // 1. Lógica de QR Code
     if (qr) {
       try {
         const qrDataURL = await QRCode.toDataURL(qr)
-        // Se estivermos tentando pareamento por número, não sobrescrevemos o status, apenas guardamos o QR como fallback
         const updateData: any = { qrCode: qrDataURL }
         if (!phoneNumber) {
           updateData.status = 'connecting'
@@ -354,6 +314,61 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       }
     }
 
+    // 2. Lógica de Pairing Code (Refatorada para handler único)
+    if (connection === 'connecting' && phoneNumber && !pairingCodeRequested) {
+      pairingCodeRequested = true
+      console.log(`[MOTA-FLOW] [User ${userId}] Agendando solicitação de pairing code para ${phoneNumber} em 3s...`)
+      
+      setTimeout(async () => {
+        try {
+          if (sock.authState.creds.registered) {
+            console.log(`[MOTA-FLOW] [User ${userId}] Já registrado, ignorando solicitação de pairing code.`)
+            return
+          }
+          
+          const cleanNumber = cleanPhoneNumber(phoneNumber)
+          console.log(`[MOTA-FLOW] [User ${userId}] Solicitando pairing code para ${cleanNumber}...`)
+          const code = await sock.requestPairingCode(cleanNumber)
+          console.log(`[MOTA-FLOW] [User ${userId}] ✅ Pairing code recebido: ${code}`)
+          
+          await db.updateWhatsappInstance(instanceId, { 
+            status: 'connecting', 
+            pairingCode: code, 
+            qrCode: null,
+            phoneNumber: cleanNumber 
+          })
+        } catch (err: any) {
+          console.error(`[MOTA-FLOW] [User ${userId}] ❌ Erro ao obter pairing code:`, err.message)
+          pairingCodeRequested = false // Permitir nova tentativa se falhar
+        }
+      }, 3000)
+    }
+
+    // 3. Conexão Estabelecida (O MAIS IMPORTANTE)
+    if (connection === 'open') {
+      console.log(`[MOTA-FLOW] [User ${userId}] ✅ CONEXÃO ESTABELECIDA! Atualizando banco...`)
+      
+      const me = sock.user
+      const cleanMeId = me?.id?.split(':')[0] || ''
+      
+      try {
+        await db.updateWhatsappInstance(instanceId, {
+          status: 'connected',
+          phoneNumber: cleanMeId,
+          qrCode: null,
+          pairingCode: null
+        })
+        console.log(`[MOTA-FLOW] [User ${userId}] Banco de dados atualizado com status 'connected' para ${cleanMeId}`)
+        
+        // Limpar travas e contadores de erro
+        connectionLocks.delete(userId)
+        reconnectAttempts.delete(userId)
+      } catch (dbErr) {
+        console.error(`[MOTA-FLOW] [User ${userId}] Erro ao atualizar banco no 'open':`, dbErr)
+      }
+    }
+
+    // 4. Conexão Fechada
     if (connection === 'close') {
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
       console.log(`[MOTA-FLOW] [User ${userId}] Conexão fechada. Status: ${statusCode}`)
@@ -370,137 +385,43 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
         return
       }
 
-      if (!isLoggedOut) {
-        // Implementar retry com backoff exponencial
-        const retryData = reconnectAttempts.get(userId) || { count: 0, lastAttempt: 0 }
-        const now = Date.now()
-        
-        // Backoff exponencial: 5s, 10s, 20s, 40s, 80s (máximo 5 tentativas)
-        const backoffDelay = Math.min(5000 * Math.pow(2, retryData.count), 80000)
-        
-        if (retryData.count < 5) {
-          console.log(`[MOTA-FLOW] [User ${userId}] Tentativa de reconexão ${retryData.count + 1}/5 com backoff de ${backoffDelay}ms`)
-          reconnectAttempts.set(userId, { count: retryData.count + 1, lastAttempt: now })
-          
-          setTimeout(async () => {
-            if (sessions.get(userId) === sock && sock.ws.readyState !== sock.ws.OPEN) {
-              console.log(`[MOTA-FLOW] [User ${userId}] Reconectando...`)
-              connectToWhatsApp(userId, instanceId, reconnectPhone, true)
-            }
-          }, backoffDelay)
-          
-          // Timeout para marcar como desconectado se não reconectar
-          setTimeout(async () => {
-            if (sessions.get(userId) === sock && sock.ws.readyState !== sock.ws.OPEN) {
-              console.log(`[MOTA-FLOW] [User ${userId}] Reconexão falhou após tentativas. Marcando como desconectado.`)
-              await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null, pairingCode: null, phoneNumber: null })
-              sessions.delete(userId)
-              reconnectAttempts.delete(userId)
-              if (fs.existsSync(sessionPath)) {
-                try {
-                  fs.rmSync(sessionPath, { recursive: true, force: true })
-                } catch (e) {}
-              }
-            }
-          }, backoffDelay + 15000) // Dar 15s após o backoff para tentar reconectar
-        } else {
-          console.log(`[MOTA-FLOW] [User ${userId}] Máximo de tentativas de reconexão atingido. Marcando como desconectado.`)
-          await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null, pairingCode: null, phoneNumber: null })
-          sessions.delete(userId)
-          reconnectAttempts.delete(userId)
-          if (fs.existsSync(sessionPath)) {
-            try {
-              fs.rmSync(sessionPath, { recursive: true, force: true })
-            } catch (e) {}
-          }
-        }
+      if (isLoggedOut) {
+        console.log(`[MOTA-FLOW] [User ${userId}] Logout detectado. Limpando sessão...`)
+        connectionLocks.delete(userId)
+        if (fs.existsSync(sessionPath)) fs.rmSync(sessionPath, { recursive: true, force: true })
+        await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null, pairingCode: null })
+        return
+      }
+
+      // Outros erros: Retry com backoff exponencial
+      const retryData = reconnectAttempts.get(userId) || { count: 0, lastAttempt: 0 }
+      const backoffDelay = Math.min(5000 * Math.pow(2, retryData.count), 80000)
+      
+      if (retryData.count < 5) {
+        console.log(`[MOTA-FLOW] [User ${userId}] Tentativa de reconexão ${retryData.count + 1} em ${backoffDelay/1000}s...`)
+        reconnectAttempts.set(userId, { count: retryData.count + 1, lastAttempt: Date.now() })
+        setTimeout(() => connectToWhatsApp(userId, instanceId, phoneNumber, true), backoffDelay)
       } else {
-        console.log(`[MOTA-FLOW] [User ${userId}] Logout detectado ou sessão encerrada permanentemente.`)
-        connectionLocks.delete(userId) // Liberar trava
-        await db.updateWhatsappInstance(instanceId, { status: 'disconnected', qrCode: null, pairingCode: null, phoneNumber: null })
-        sessions.delete(userId)
-        if (fs.existsSync(sessionPath)) {
-          try {
-            fs.rmSync(sessionPath, { recursive: true, force: true })
-          } catch (e) {}
-        }
+        console.log(`[MOTA-FLOW] [User ${userId}] Limite de reconexões atingido.`)
+        connectionLocks.delete(userId)
+        await db.updateWhatsappInstance(instanceId, { status: 'disconnected' })
       }
-    }
-
-    if (connection === 'open') {
-      console.log(`[MOTA-FLOW] [User ${userId}] Conexão aberta com sucesso! Atualizando banco de dados...`)
-      connectionLocks.delete(userId) // Liberar trava
-      const phone = sock.user?.id.split(':')[0]
-      
-      try {
-        await db.updateWhatsappInstance(instanceId, { 
-          status: 'connected', 
-          phoneNumber: phone, 
-          qrCode: null, 
-          pairingCode: null 
-        })
-        console.log(`[MOTA-FLOW] [User ${userId}] Status 'connected' persistido no banco de dados para o número ${phone}`)
-      } catch (dbErr: any) {
-        console.error(`[MOTA-FLOW] [User ${userId}] Erro ao persistir status 'connected':`, dbErr.message)
-      }
-
-      // Limpar contador de retry quando conecta com sucesso
-      reconnectAttempts.delete(userId)
-      
-      // TESTE AUTOMÁTICO: Enviar mensagem de teste após 2 segundos
-      setTimeout(async () => {
-        try {
-          console.log(`[MOTA-FLOW] [User ${userId}] ========== INICIANDO TESTE DE DISPARO ==========`)
-          const testNumber = '559185892191@s.whatsapp.net'
-          const testMessage = '🤖 Teste MOTA-FLOW: Conexão bem-sucedida! ' + new Date().toLocaleTimeString('pt-BR')
-          console.log(`[MOTA-FLOW] [User ${userId}] Enviando mensagem de teste para ${testNumber}...`)
-          const result = await sock.sendMessage(testNumber, { text: testMessage })
-          console.log(`[MOTA-FLOW] [User ${userId}] ✅ TESTE SUCESSO! Mensagem enviada: ${result.key.id}`)
-        } catch (testErr: any) {
-          console.error(`[MOTA-FLOW] [User ${userId}] ❌ TESTE FALHOU! Erro:`, testErr.message)
-        }
-      }, 2000)
     }
   })
 
   sock.ev.on('creds.update', async () => {
-    console.log(`[MOTA-FLOW] [User ${userId}] Salvando credenciais atualizadas...`)
     await saveCreds()
   })
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    // Processar tanto notify quanto append para garantir que nada escape
+    if (type !== 'notify') return
     for (const msg of messages) {
-      try {
-        if (!msg.message || msg.key.fromMe) continue
-        
-        // Ignorar mensagens de grupos se necessário (opcional, mas bom para bot pessoal)
-        if (msg.key.remoteJid?.endsWith('@g.us')) continue
-
-        const text = (
-          msg.message?.conversation || 
-          msg.message?.extendedTextMessage?.text || 
-          msg.message?.imageMessage?.caption ||
-          msg.message?.videoMessage?.caption ||
-          msg.message?.buttonsResponseMessage?.selectedButtonId ||
-          msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId ||
-          ''
-        ).trim()
-
-        if (!text && type === 'notify') {
-          console.log(`[MOTA-FLOW] [User ${userId}] Mensagem sem texto de ${msg.key.remoteJid}`)
-          continue
-        }
-
-        console.log(`[MOTA-FLOW] [User ${userId}] Mensagem detectada [${type}] de ${msg.key.remoteJid}: ${text || 'mídia/sem-texto'}`)
+      if (!msg.key.fromMe && msg.message) {
         await processMessage(sock, msg, userId, instanceId)
-      } catch (err) {
-        console.error(`[MOTA-FLOW] [User ${userId}] Erro ao processar messages.upsert:`, err)
       }
     }
   })
 
-  // Log de histórico para debug
   sock.ev.on('messaging-history.set', ({ messages }) => {
     console.log(`[MOTA-FLOW] Histórico sincronizado: ${messages.length} mensagens carregadas.`)
   })
@@ -543,7 +464,6 @@ async function processMessage(sock: any, msg: WAMessage, userId: number, instanc
       return
     }
 
-    // Parsing flowData if it's a string
     let flowData: MenuFlowData
     try {
       flowData = typeof activeFlow.flowData === 'string' 
@@ -559,7 +479,6 @@ async function processMessage(sock: any, msg: WAMessage, userId: number, instanc
       return
     }
 
-    // Se for palavra-chave de reset ou não tiver estado, começa do início
     if (!state || isResetKeyword) {
       const rootMenu = flowData.menus[flowData.rootMenuId]
       if (rootMenu) {
@@ -580,13 +499,11 @@ async function processMessage(sock: any, msg: WAMessage, userId: number, instanc
       return
     }
 
-    // Se estiver em um menu, verifica as opções
     const currentMenu = flowData.menus[state.menuId]
     if (!currentMenu) {
       console.log(`[MOTA-FLOW] [User ${userId}] Menu atual ${state.menuId} não encontrado. Resetando.`)
       messageStates.delete(from)
       await sock.sendMessage(from, { text: 'Desculpe, houve um problema e seu menu atual não foi encontrado. Reiniciando o fluxo.' })
-      // Tenta reiniciar o fluxo
       const rootMenu = flowData.menus[flowData.rootMenuId]
       if (rootMenu) {
         await sendMenu(sock, from, rootMenu)
@@ -602,7 +519,6 @@ async function processMessage(sock: any, msg: WAMessage, userId: number, instanc
       return
     }
 
-    // Tentar encontrar opção por número ou por texto (case insensitive)
     const option = currentMenu.options.find(o => 
       o.number.toString() === text || 
       o.text.toLowerCase() === text.toLowerCase()
@@ -611,12 +527,10 @@ async function processMessage(sock: any, msg: WAMessage, userId: number, instanc
     if (option) {
       console.log(`[MOTA-FLOW] [User ${userId}] Opção selecionada: ${option.number} - ${option.text}`)
       
-      // Se tiver uma resposta direta na opção, envia primeiro
       if (option.response) {
         await sock.sendMessage(from, { text: option.response })
       }
 
-      // Se tiver um próximo menu e ele existir, envia e atualiza estado
       if (option.nextMenuId && flowData.menus[option.nextMenuId]) {
         const nextMenu = flowData.menus[option.nextMenuId]
         await sendMenu(sock, from, nextMenu)
@@ -629,7 +543,6 @@ async function processMessage(sock: any, msg: WAMessage, userId: number, instanc
           lastInteraction: now
         })
       } else {
-        // Se não tiver próximo menu ou o próximo menu não existir, marca como finalizado
         messageStates.set(from, { 
           ...state, 
           status: 'finished',
@@ -638,7 +551,6 @@ async function processMessage(sock: any, msg: WAMessage, userId: number, instanc
         await sock.sendMessage(from, { text: 'Obrigado! Seu atendimento foi finalizado. Digite \'menu\' para recomeçar.' })
       }
     } else {
-      // Se não for uma opção válida, repete o menu atual
       console.log(`[MOTA-FLOW] [User ${userId}] Opção inválida de ${from}: "${text}". Repetindo menu.`)
       await sendMenu(sock, from, currentMenu)
     }
@@ -655,7 +567,6 @@ async function sendMenu(sock: any, to: string, menu: MenuNode) {
     
     if (menu.options && menu.options.length > 0) {
       text += `\n\n`
-      // Ordenar opções por número
       const sortedOptions = [...menu.options].sort((a, b) => a.number - b.number)
       sortedOptions.forEach(opt => {
         text += `*${opt.number}* - ${opt.text}\n`
@@ -673,7 +584,6 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
   const user = (req as any).user as AuthPayload
   const { phoneNumber } = req.body
   
-  // Limpeza profunda: remover sessão anterior se existir
   const sessionPath = path.join(process.cwd(), 'sessions', `session_${user.userId}`)
   if (fs.existsSync(sessionPath)) {
     try {
@@ -692,7 +602,7 @@ app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Resp
   if (instance) {
     try {
       await db.updateWhatsappInstance(instance.id, { qrCode: null, pairingCode: null, status: 'connecting' })
-      console.log(`[MOTA-FLOW] Iniciando conexão para usuário ${user.userId} com número ${phoneNumber || 'pairing code'}`)
+      console.log(`[MOTA-FLOW] Iniciando conexão para usuário ${user.userId} com número ${phoneNumber || 'QR code'}`)
       connectToWhatsApp(user.userId, instance.id, phoneNumber).catch(err => {
         console.error(`[MOTA-FLOW] Erro ao conectar WhatsApp:`, err)
       })
@@ -719,7 +629,7 @@ app.post('/api/whatsapp/reset', authMiddleware, async (req: Request, res: Respon
       }
       const sessionPath = path.join(process.cwd(), 'sessions', `session_${user.userId}`)
       if (fs.existsSync(sessionPath)) fs.rmSync(sessionPath, { recursive: true, force: true })
-      connectionLocks.delete(user.userId) // Liberar trava no reset
+      connectionLocks.delete(user.userId)
       await db.updateWhatsappInstance(instance.id, { status: 'disconnected', qrCode: null, pairingCode: null, phoneNumber: null })
       res.json({ message: 'Resetado' })
     } else {
@@ -756,7 +666,6 @@ app.post('/api/whatsapp/reconnect', authMiddleware, async (req: Request, res: Re
       return res.status(404).json({ message: 'Instância WhatsApp não encontrada' })
     }
 
-    // Fechar socket antigo se existir
     const sock = sessions.get(user.userId)
     if (sock) {
       sock.ev.removeAllListeners('connection.update')
@@ -766,10 +675,7 @@ app.post('/api/whatsapp/reconnect', authMiddleware, async (req: Request, res: Re
       sessions.delete(user.userId)
     }
 
-    // Atualizar status para conectando
     await db.updateWhatsappInstance(instance.id, { status: 'connecting', qrCode: null, pairingCode: null })
-
-    // Tentar reconectar usando as credenciais salvas (isReconnect = true)
     connectToWhatsApp(user.userId, instance.id, instance.phoneNumber || undefined, true)
 
     res.json({ success: true, message: 'Reconectando...' })
@@ -789,7 +695,6 @@ app.get('/api/whatsapp/logs', authMiddleware, async (req: Request, res: Response
 
   try {
     const logs = fs.readFileSync(logPath, 'utf8')
-    // Retornar apenas as últimas 100 linhas para não sobrecarregar
     const lines = logs.split('\n').slice(-100).join('\n')
     res.json({ logs: lines })
   } catch (err) {
