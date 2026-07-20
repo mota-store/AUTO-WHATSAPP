@@ -318,15 +318,22 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
       }
     }
 
-    // 2. Lógica de Pairing Code (Refatorada para handler único)
+    // 2. Lógica de Pairing Code (Refatorada para não sobrescrever sessões válidas)
     if (connection === 'connecting' && phoneNumber && !pairingCodeRequested) {
+      // SÓ PEDE CÓDIGO SE NÃO TIVER CREDENCIAIS REGISTRADAS
+      if (sock.authState.creds && sock.authState.creds.registered) {
+        console.log(`[MOTA-FLOW] [User ${userId}] Sessão já registrada. Pulando geração de código.`)
+        return
+      }
+
       pairingCodeRequested = true
       console.log(`[MOTA-FLOW] [User ${userId}] Agendando solicitação de pairing code para ${phoneNumber} em 3s...`)
       
       setTimeout(async () => {
         try {
-          if (sock.authState.creds.registered) {
-            console.log(`[MOTA-FLOW] [User ${userId}] Já registrado, ignorando solicitação de pairing code.`)
+          // Checagem dupla antes de pedir o código
+          if (sock.authState.creds && sock.authState.creds.registered) {
+            console.log(`[MOTA-FLOW] [User ${userId}] Registro detectado no timeout, cancelando código.`)
             return
           }
           
@@ -650,16 +657,15 @@ async function sendMenu(sock: any, to: string, menu: MenuNode) {
 // WHATSAPP API
 app.post('/api/whatsapp/connect', authMiddleware, async (req: Request, res: Response) => {
   const user = (req as any).user as AuthPayload
-  const { phoneNumber } = req.body
+  const { phoneNumber, usePairingCode } = req.body
   
   const sessionPath = path.join(process.cwd(), 'sessions', `session_${user.userId}`)
-  if (fs.existsSync(sessionPath)) {
-    try {
-      fs.rmSync(sessionPath, { recursive: true, force: true })
-      console.log(`[MOTA-FLOW] Sessão anterior limpa para usuário ${user.userId}`)
-    } catch (err) {
-      console.error(`[MOTA-FLOW] Erro ao limpar sessão:`, err)
-    }
+  
+  // SÓ LIMPA A SESSÃO SE FOR UM NOVO NÚMERO OU SE O USUÁRIO NÃO TIVER SESSÃO VÁLIDA
+  const isNewNumber = phoneNumber && !fs.existsSync(sessionPath)
+  if (isNewNumber) {
+    console.log(`[MOTA-FLOW] Novo número detectado para usuário ${user.userId}. Limpando rastro anterior...`)
+    if (fs.existsSync(sessionPath)) fs.rmSync(sessionPath, { recursive: true, force: true })
   }
   
   let instance = await db.getWhatsappInstance(user.userId)
@@ -734,7 +740,7 @@ app.post('/api/whatsapp/reconnect', authMiddleware, async (req: Request, res: Re
       return res.status(404).json({ message: 'Instância WhatsApp não encontrada' })
     }
 
-    console.log(`[MOTA-FLOW] [User ${user.userId}] Executando "choque" de reconexão forçada...`)
+    console.log(`[MOTA-FLOW] [User ${user.userId}] Executando reconexão mantendo sessão...`)
 
     // Liberar qualquer trava existente
     connectionLocks.delete(user.userId)
@@ -744,22 +750,20 @@ app.post('/api/whatsapp/reconnect', authMiddleware, async (req: Request, res: Re
     if (sock) {
       try {
         sock.ev.removeAllListeners('connection.update')
-        sock.ev.removeAllListeners('creds.update')
-        sock.ev.removeAllListeners('messages.upsert')
         sock.ws.close()
       } catch (e) {}
       sessions.delete(user.userId)
     }
 
-    // Atualizar status para conectando IMEDIATAMENTE
-    await db.updateWhatsappInstance(instance.id, { status: 'connecting', qrCode: null, pairingCode: null })
-    
+    // NUNCA LIMPAR A PASTA SESSIONS NO RECONNECT
+    // Apenas reinicia o túnel Baileys
+
     // Iniciar conexão forçada mantendo a sessão (isReconnect = true)
     connectToWhatsApp(user.userId, instance.id, instance.phoneNumber || undefined, true).catch(err => {
       console.error(`[MOTA-FLOW] Erro no choque de conexão:`, err)
     })
 
-    res.json({ success: true, message: 'Reconexão forçada iniciada' })
+    res.json({ success: true, message: 'Reconexão iniciada' })
   } catch (error) {
     console.error(`[MOTA-FLOW] Erro ao reconectar:`, error)
     res.status(500).json({ success: false, message: 'Erro ao reconectar' })
