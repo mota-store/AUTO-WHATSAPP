@@ -53,9 +53,27 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
         // Extrair o conteúdo de texto puro do DataURL para preencher o roteiro
         try {
           const base64Content = result.split(',')[1]
-          const decodedText = atob(base64Content)
+          const binaryString = atob(base64Content)
+          const bytes = new Uint8Array(binaryString.length)
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i)
+          }
+          
+          // Tentar decodificar como UTF-8 primeiro
+          let decodedText = new TextDecoder('utf-8').decode(bytes)
+          
+          // Se contiver caracteres estranhos (indicando ISO-8859-1), tentar decodificar novamente
+          if (decodedText.includes('') || /[\u0080-\u00ff]/.test(decodedText)) {
+            try {
+              const isoText = new TextDecoder('iso-8859-1').decode(bytes)
+              if (!isoText.includes('')) {
+                decodedText = isoText
+              }
+            } catch (e) {}
+          }
+          
           setScript(decodedText)
-          toast.success('Roteiro carregado do arquivo!')
+          toast.success('Roteiro carregado com sucesso!')
         } catch (e) {
           console.error('Erro ao decodificar arquivo:', e)
           toast.error('Erro ao ler conteúdo do arquivo')
@@ -102,7 +120,8 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
         
         for (let i = startLine; i < lines.length; i++) {
           const line = lines[i]
-          const optionMatch = line.match(/^([0-9]️⃣|[0-9]\.)\s*(.*)/)
+          // Suporte a 1️⃣, 1., 1), 1- ou apenas 1
+          const optionMatch = line.match(/^([0-9]️⃣|[0-9][\.\)\-\s]?)\s*(.*)/)
           
           if (optionMatch) {
             const numStr = optionMatch[1].replace(/[^0-9]/g, '')
