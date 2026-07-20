@@ -108,14 +108,26 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
       // First pass: Create menu nodes
       sections.forEach((section, index) => {
         const lines = section.split('\n').map(l => l.trim()).filter(Boolean)
-        const menuId = index === 0 ? 'menu_0' : `menu_${Date.now()}_${index}`
-        menuMapping[index] = menuId
-
+        
         // Extract title
         let title = lines[0].replace(/^[🤖\s]+/, '')
-        if (lines[0].toLowerCase().startsWith('se responder') || lines[0].toLowerCase().startsWith('se escolher')) {
+        const isTriggerSection = lines[0].toLowerCase().startsWith('se responder') || lines[0].toLowerCase().startsWith('se escolher')
+        
+        if (isTriggerSection) {
           title = lines[0]
         }
+
+        // Seção especial: Menu Principal sempre aponta para o menu_0
+        if (title.toLowerCase().includes('menu principal') && isTriggerSection) {
+          // Não criamos um novo menu para gatilhos do Menu Principal, 
+          // apenas marcamos que esta seção deve ser ignorada na criação de novos nós
+          // e mapeada para o menu_0 no segundo passo
+          menuMapping[index] = 'menu_0'
+          return
+        }
+
+        const menuId = index === 0 ? 'menu_0' : `menu_${Date.now()}_${index}`
+        menuMapping[index] = menuId
 
         const messageLines: string[] = []
         const options: MenuOption[] = []
@@ -152,6 +164,12 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
       sections.forEach((section, index) => {
         const lines = section.split('\n').map(l => l.trim()).filter(Boolean)
         const firstLine = lines[0].toLowerCase()
+        
+        // Se for uma seção de gatilho do Menu Principal, ela já foi mapeada para menu_0
+        // e não precisa ser processada como um novo nó de destino
+        if (firstLine.includes('menu principal') && (firstLine.includes('se responder') || firstLine.includes('se escolher'))) {
+          return
+        }
         
         if (firstLine.includes('se responder') || firstLine.includes('se escolher')) {
           // 1. Tentar vincular por número (ex: "Se responder 1")
