@@ -90,6 +90,8 @@ export default function FlowEditor() {
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(!!flowId)
   const [previewMode, setPreviewMode] = useState(false)
+  const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [botAvatar, setBotAvatar] = useState<string>('')
   const [showGenerator, setShowGenerator] = useState(false)
 
@@ -106,6 +108,12 @@ export default function FlowEditor() {
       loadFlow()
     }
     loadBotAvatar()
+
+    // Abrir gerador automático se solicitado
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('openGenerator') === 'true') {
+      setShowGenerator(true)
+    }
   }, [flowId])
 
   useEffect(() => {
@@ -182,20 +190,14 @@ export default function FlowEditor() {
     }
   }
 
-  const handleSave = async () => {
-    if (!flowName.trim()) {
-      toast.error('Dê um nome para este fluxo')
-      return
-    }
+  const handleSave = async (isAuto = false) => {
+    if (!flowName.trim() || !flowId) return
 
-    setIsSaving(true)
+    if (!isAuto) setIsSaving(true)
     try {
       const token = localStorage.getItem('token')
-      const method = flowId ? 'PUT' : 'POST'
-      const url = flowId ? `/api/flows/${flowId}` : '/api/flows'
-
-      const response = await fetch(url, {
-        method,
+      const response = await fetch(`/api/flows/${flowId}`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
@@ -208,15 +210,33 @@ export default function FlowEditor() {
       })
 
       if (response.ok) {
-        toast.success('Salvo com sucesso!')
-        navigate('/flows')
+        setLastSaved(new Date())
+        if (!isAuto) {
+          toast.success('Salvo com sucesso!')
+          navigate('/flows')
+        }
       }
     } catch (error) {
-      toast.error('Erro ao salvar')
+      if (!isAuto) toast.error('Erro ao salvar')
     } finally {
-      setIsSaving(false)
+      if (!isAuto) setIsSaving(false)
     }
   }
+
+  // Lógica de Auto-Save
+  useEffect(() => {
+    if (isLoading || !flowId) return
+
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    
+    autoSaveTimerRef.current = setTimeout(() => {
+      handleSave(true)
+    }, 2000) // Salva 2 segundos após a última alteração
+
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    }
+  }, [flowData, flowName, flowDescription])
 
   const createNextStep = (optionId: string) => {
     const optionIndex = selectedMenu.options.findIndex(o => o.id === optionId)
@@ -358,14 +378,21 @@ export default function FlowEditor() {
                 {previewMode ? <ChevronLeft className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 {previewMode ? 'Sair do Teste' : 'Testar Fluxo'}
               </button>
-              <button 
-                onClick={handleSave}
-                disabled={isSaving}
-                className="flex-1 md:flex-none px-6 py-3 bg-primary text-black rounded-2xl font-black text-xs flex items-center justify-center gap-2 shadow-xl shadow-primary/20 hover:opacity-90 transition-all active:scale-95 disabled:opacity-50"
-              >
-                {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                Salvar Alterações
-              </button>
+              <div className="flex flex-col items-end gap-1">
+                <button 
+                  onClick={() => handleSave()}
+                  disabled={isSaving}
+                  className="w-full md:w-auto px-6 py-3 bg-primary text-black rounded-2xl font-black text-xs flex items-center justify-center gap-2 shadow-xl shadow-primary/20 hover:opacity-90 transition-all active:scale-95 disabled:opacity-50"
+                >
+                  {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Sair e Salvar
+                </button>
+                {lastSaved && (
+                  <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mr-2 animate-pulse">
+                    ✓ Auto-salvo às {lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
+              </div>
             </div>
           </header>
 
