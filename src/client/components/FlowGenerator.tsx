@@ -44,11 +44,22 @@ export default function FlowGenerator({ isOpen, onClose, onGenerate }: FlowGener
       }
       const reader = new FileReader()
       reader.onload = (event) => {
+        const result = event.target?.result as string
         setAttachment({
           name: file.name,
-          data: event.target?.result as string
+          data: result
         })
-        toast.success('Arquivo .txt carregado!')
+        
+        // Extrair o conteúdo de texto puro do DataURL para preencher o roteiro
+        try {
+          const base64Content = result.split(',')[1]
+          const decodedText = atob(base64Content)
+          setScript(decodedText)
+          toast.success('Roteiro carregado do arquivo!')
+        } catch (e) {
+          console.error('Erro ao decodificar arquivo:', e)
+          toast.error('Erro ao ler conteúdo do arquivo')
+        }
       }
       reader.readAsDataURL(file)
     }
