@@ -283,13 +283,15 @@ async function connectToWhatsApp(userId: number, instanceId: number, phoneNumber
     },
     logger: pino({ level: 'silent' }),
     browser: browserConfig,
-    connectTimeoutMs: 60000,
+    connectTimeoutMs: 90000, // Aumentado para maior estabilidade no boot
     printQRInTerminal: false,
     syncFullHistory: false,
     markOnlineOnConnect: true,
     shouldSyncHistoryMessage: () => false,
     qrTimeout: 60000,
-    defaultQueryTimeoutMs: 60000,
+    defaultQueryTimeoutMs: 90000,
+    keepAliveIntervalMs: 30000, // Envia pings frequentes para manter socket vivo
+    retryRequestDelayMs: 5000,
   })
 
   console.log(`[MOTA-FLOW] [User ${userId}] Socket criado e armazenado com sucesso`)
@@ -785,10 +787,28 @@ app.use(express.static(path.join(__dirname, 'client')))
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'client', 'index.html')))
 
 const server = app.listen(PORT, '0.0.0.0', () => {
-  db.syncSchema().then(() => {
-    preloadBaileysVersion().then(() => {
-      console.log(`🚀 [MOTA-FLOW] Porta ${PORT}`)
-    })
+  db.syncSchema().then(async () => {
+    await preloadBaileysVersion()
+    console.log(`🚀 [MOTA-FLOW] Porta ${PORT}`)
+    
+    // RESTAURAÇÃO AUTOMÁTICA DE SESSÕES
+    try {
+      console.log('[MOTA-FLOW] Restaurando sessões ativas...')
+      const allInstances = await db.getAllWhatsappInstances()
+      const activeInstances = allInstances.filter(inst => inst.status === 'connected')
+      
+      console.log(`[MOTA-FLOW] Encontradas ${activeInstances.length} sessões para restaurar.`)
+      
+      for (const inst of activeInstances) {
+        console.log(`[MOTA-FLOW] Restaurando sessão do usuário ${inst.userId}...`)
+        // Inicia conexão em background sem aguardar
+        connectToWhatsApp(inst.userId, inst.id, inst.phoneNumber || undefined, true).catch(err => {
+          console.error(`[MOTA-FLOW] Falha ao restaurar sessão ${inst.userId}:`, err)
+        })
+      }
+    } catch (err) {
+      console.error('[MOTA-FLOW] Erro ao buscar instâncias para restauração:', err)
+    }
   })
 })
 

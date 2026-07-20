@@ -97,6 +97,8 @@ export default function FlowEditor() {
   const [previewCurrentMenuId, setPreviewCurrentMenuId] = useState<string>('')
   const [previewMessages, setPreviewMessages] = useState<ChatMessage[]>([])
   const [previewInput, setPreviewInput] = useState('')
+  const [isPreviewTyping, setIsPreviewTyping] = useState(false)
+  const [isPreviewRecording, setIsPreviewRecording] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -115,10 +117,32 @@ export default function FlowEditor() {
       const rootMenu = flowData.menus[flowData.rootMenuId]
       if (rootMenu) {
         setPreviewCurrentMenuId(flowData.rootMenuId)
-        setPreviewMessages([{ type: 'bot', text: rootMenu.message }])
+        handleBotResponse(rootMenu)
       }
+    } else {
+      setPreviewMessages([])
+      setIsPreviewTyping(false)
+      setIsPreviewRecording(false)
     }
   }, [previewMode])
+
+  const handleBotResponse = async (menu: MenuNode, responseText?: string, attachmentName?: string, attachmentData?: string, delay?: number, isTyping?: boolean, isRecording?: boolean) => {
+    const waitTime = (delay || menu.delay || 0) * 1000
+    if (waitTime > 0 || isTyping || menu.isTyping || isRecording || menu.isRecording) {
+      if (isRecording || menu.isRecording) setIsPreviewRecording(true)
+      else setIsPreviewTyping(true)
+      await new Promise(resolve => setTimeout(resolve, Math.max(waitTime, 1000)))
+      setIsPreviewTyping(false)
+      setIsPreviewRecording(false)
+    }
+
+    const newMessages: ChatMessage[] = []
+    if (responseText || attachmentName) {
+      newMessages.push({ type: 'bot', text: responseText || '', attachmentName, attachmentData })
+    }
+    newMessages.push({ type: 'bot', text: menu.message })
+    setPreviewMessages(prev => [...prev, ...newMessages])
+  }
 
   const loadBotAvatar = async () => {
     try {
@@ -218,30 +242,18 @@ export default function FlowEditor() {
     toast.success('Nova resposta criada!')
   }
 
-  const handlePreviewOptionClick = (option: MenuOption) => {
-    if (!flowData) return
-
+  const handlePreviewOptionClick = async (option: MenuOption) => {
+    if (!flowData || isPreviewTyping || isPreviewRecording) return
     const currentMenu = flowData.menus[previewCurrentMenuId]
     if (!currentMenu) return
-
-    const newMessages: ChatMessage[] = [...previewMessages, { type: 'user', text: option.number.toString() }]
-    
-    if (option.response || option.attachmentName) {
-      newMessages.push({ 
-        type: 'bot', 
-        text: option.response || '',
-        attachmentName: option.attachmentName,
-        attachmentData: option.attachmentData
-      })
-    }
-
+    setPreviewMessages(prev => [...prev, { type: 'user', text: option.number.toString() }])
     if (option.nextMenuId && flowData.menus[option.nextMenuId]) {
       const nextMenu = flowData.menus[option.nextMenuId]
-      newMessages.push({ type: 'bot', text: nextMenu.message })
       setPreviewCurrentMenuId(option.nextMenuId)
+      await handleBotResponse(nextMenu, option.response, option.attachmentName, option.attachmentData, option.delay, option.isTyping, option.isRecording)
+    } else if (option.response || option.attachmentName) {
+      await handleBotResponse(currentMenu, option.response, option.attachmentName, option.attachmentData, option.delay, option.isTyping, option.isRecording)
     }
-
-    setPreviewMessages(newMessages)
   }
 
   const handlePreviewSend = () => {
@@ -442,7 +454,9 @@ export default function FlowEditor() {
                       </div>
                       <div>
                         <p className="text-white font-black text-sm tracking-tight">MOTA-FLOW</p>
-                        <p className="text-emerald-500 text-[10px] font-bold">Online</p>
+                        <p className="text-emerald-500 text-[10px] font-bold">
+                          {isPreviewTyping ? 'Digitando...' : isPreviewRecording ? 'Gravando áudio...' : 'Online'}
+                        </p>
                       </div>
                     </div>
 

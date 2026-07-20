@@ -146,6 +146,13 @@ export async function getWhatsappInstance(userId: number) {
   return instances[0]
 }
 
+export async function getAllWhatsappInstances() {
+  const database = await getDb()
+  return database
+    .select()
+    .from(schema.whatsappInstances)
+}
+
 export async function updateWhatsappInstance(
   instanceId: number,
   data: Partial<typeof schema.whatsappInstances.$inferInsert>
